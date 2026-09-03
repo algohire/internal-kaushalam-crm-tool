@@ -37,7 +37,6 @@ type RequirementData = {
   id: string;
   roleName: string;
   roleNameEdited: string | null;
-  standardRole: string | null;
   requiredCount: number | null;
   requiredCountValidated: number | null;
   qualification: string | null;
@@ -73,8 +72,7 @@ function toRequirementUpdate(req: RequirementData): RequirementUpdate {
     roleName: req.roleName,
     requiredCount: req.requiredCount,
     roleNameEdited: req.roleNameEdited || undefined,
-    standardRole: req.standardRole || undefined,
-    requiredCountValidated: req.requiredCountValidated,
+    requiredCountValidated: req.requiredCountValidated ?? 0,
     qualification: req.qualification || undefined,
     experienceFrom: req.experienceFrom,
     experienceTo: req.experienceTo,
@@ -149,6 +147,12 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
 
   function handleRemoveRole(index: number) {
     setReqUpdates((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function handleApplyToAll(field: string, value: unknown) {
+    setReqUpdates((prev) =>
+      prev.map((req) => (req.status === "no_requirement" ? req : { ...req, [field]: value }))
+    );
   }
 
   function handleHandoff(index: number) {
@@ -295,9 +299,9 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
               requirements={reqUpdates}
               qualificationOptions={qualificationOptions}
               onUpdate={handleReqUpdate}
+              onApplyToAll={handleApplyToAll}
               onAdd={handleAddRole}
               onRemove={handleRemoveRole}
-              validationErrors={errors}
             />
           </div>
 

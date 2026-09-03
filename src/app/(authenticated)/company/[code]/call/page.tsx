@@ -44,7 +44,6 @@ export default async function LogCallPage({
       id: requirementTable.id,
       roleName: requirementTable.roleName,
       roleNameEdited: requirementTable.roleNameEdited,
-      standardRole: requirementTable.standardRole,
       requiredCount: requirementTable.requiredCount,
       requiredCountValidated: requirementTable.requiredCountValidated,
       qualification: requirementTable.qualification,
