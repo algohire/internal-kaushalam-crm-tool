@@ -100,7 +100,6 @@ export function QualificationMultiSelect({
                         selected.includes(opt.id) ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    <span className="text-xs text-muted-foreground mr-1.5">{opt.id}</span>
                     {opt.name}
                   </CommandItem>
                 ))}

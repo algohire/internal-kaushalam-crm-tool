@@ -1,0 +1,264 @@
+# How to Fill the Backfill Sheet
+
+> **Who is this for?** Callers and leads who validate employer requirements over the phone and need to enter that data into the CRM in bulk via a spreadsheet.
+
+---
+
+## Quick Start
+
+1. You'll receive a CSV file named something like `backfill-export-2026-09-03.csv`
+2. Open it in **Excel** or **Google Sheets**
+3. Fill in the **green columns** (M onwards) — leave the **grey columns** (A–L) untouched
+4. Save as CSV (UTF-8) and return to the admin
+
+---
+
+## Understanding the Sheet
+
+The sheet has **one row per role per company**. For example, if a company needs a "Packing Helper" and a "Machine Operator", that company appears in two rows.
+
+### Columns You Should NOT Edit (A–L)
+
+These come from the EDB database. They give you context about the company and role. **Do not change these.**
+
+| Column | What It Shows |
+|--------|---------------|
+| `company_code` | Unique company ID from EDB (e.g. `APIND-083`) |
+| `company_name` | Company name |
+| `district` | District where the company is located |
+| `sector` | Industry sector |
+| `tier` | Priority tier: 1 = highest (top 300), 4 = lowest |
+| `requirement_id` | Internal ID — **needed for import, do not delete** |
+| `reference_id` | EDB submission reference |
+| `role_name` | The role/job title from EDB |
+| `required_count` | Number of openings the employer registered on EDB |
+| `required_within_months` | How soon they need to fill (months) |
+| `skills` | Skills listed on EDB |
+| `current_status` | Current status in the system (usually `captured`) |
+
+---
+
+### Columns You Fill In (M onwards)
+
+Fill these based on what the employer told you on the call. **Leave blank if unknown** — only fill what you've confirmed.
+
+#### `required_count_validated` (Column M) — **Required for handoff**
+
+> **What:** The actual number of openings the employer confirmed.
+>
+> **How to fill:** Ask the employer _"How many [role] positions do you currently need to fill?"_
+>
+> - Enter a whole number: `60`, `15`, `120`
+> - This may differ from the EDB count — that's fine, enter what the employer says
+> - If they say "same as before", copy the `required_count` value from column I
+
+#### `qualification` (Column N) — **Required for handoff**
+
+> **What:** Minimum educational qualification needed for this role.
+>
+> **How to fill:** Ask _"What is the minimum qualification you need for [role]?"_
+>
+> Enter the **qualification ID** from the master list provided separately. You can enter multiple IDs separated by semicolons.
+>
+> **Examples:**
+> - Single: `51104747-dfa9-42c3-9529-a1d2d3d7254e`
+> - Multiple: `51104747-dfa9-42c3-9529-a1d2d3d7254e;e24acb59-9dc6-4a2c-bf6f-3d3693ecb1b5`
+>
+> ⚠️ _Your admin will share the qualification ID list. Use IDs, not names._
+
+#### `experience_from` (Column O) — **Required for handoff**
+
+> **What:** Minimum years of experience needed.
+>
+> **How to fill:** Enter a number from `0` to `15`.
+>
+> - Fresher = `0`
+> - "At least 2 years" = `2`
+
+#### `experience_to` (Column P) — **Required for handoff**
+
+> **What:** Maximum years of experience acceptable.
+>
+> **How to fill:** Enter a number from `0` to `15`. Must be ≥ `experience_from`.
+>
+> - "Fresher only" → from: `0`, to: `0`
+> - "1 to 3 years" → from: `1`, to: `3`
+> - "5+ years, any senior" → from: `5`, to: `15`
+
+#### `gender_preference` (Column Q) — Optional
+
+> **What:** Does the employer prefer a specific gender?
+>
+> **How to fill:** Enter one of:
+> - `Any` — no preference (default, leave blank if unsure)
+> - `Male`
+> - `Female`
+
+#### `age_limit` (Column R) — Optional
+
+> **What:** Any age requirement the employer mentioned.
+>
+> **How to fill:** Free text. Examples:
+> - `18–35`
+> - `21–40`
+> - `Below 30`
+> - Leave blank if no preference
+
+#### `salary` (Column S) — Optional
+
+> **What:** Monthly salary offered, in ₹.
+>
+> **How to fill:** Enter the number only, no ₹ symbol or commas.
+>
+> - ₹12,500/month → `12500`
+> - ₹8,000/month → `8000`
+> - If a range, enter the lower end
+> - Leave blank if employer didn't share
+
+#### `pwd` (Column T) — Optional
+
+> **What:** Is this role open to Persons with Disabilities (diversity hiring)?
+>
+> **How to fill:**
+> - `yes` — employer specifically mentioned PWD/diversity hiring
+> - `no` or leave blank — not mentioned
+
+#### `classification` (Column U) — **Required for handoff**
+
+> **What:** Where should this requirement be routed?
+>
+> **How to fill:** Enter exactly one of these three values:
+>
+> | Value | When to use |
+> |-------|-------------|
+> | `kaushalam` | Employer wants job-ready candidates. Normal hiring — goes to the Scheduling team for a placement drive. **Most common.** |
+> | `collector` | Unskilled or semi-skilled labour, needs local mobilisation through the district Collector's office. Typically daily-wage or seasonal work. |
+> | `apssdc` | Candidates need training first. Goes to APSSDC via EDB for skill development before placement. |
+>
+> **Ask yourself:** _Can our assessed candidates fill this, or does the employer need trained/mobilised candidates?_
+> - Assessed pool available → `kaushalam`
+> - Need local villagers, no skill needed → `collector`
+> - Need specific skill training first → `apssdc`
+
+#### `collector_district` (Column V) — **Required if classification = `collector`**
+
+> **What:** Which district should the Collector ticket go to?
+>
+> **How to fill:** Enter the exact district name. Must be one of:
+>
+> `Alluri Sitharama Raju`, `Anakapalli`, `Anantapuramu`, `Annamayya`, `Bapatla`, `Chittoor`, `Dr. B.R. Ambedkar Konaseema`, `East Godavari`, `Eluru`, `Guntur`, `Kakinada`, `Krishna`, `Kurnool`, `Nandyal`, `NTR`, `Palnadu`, `Parvathipuram Manyam`, `Prakasam`, `Sri Potti Sriramulu Nellore`, `Sri Sathya Sai`, `Srikakulam`, `Tirupati`, `Visakhapatnam`, `Vizianagaram`, `West Godavari`, `YSR Kadapa`
+>
+> ⚠️ Spelling must match exactly. Usually same as the company's district, but sometimes the employer wants mobilisation from a neighbouring district.
+
+#### `handoff_comment` (Column W) — **Required for handoff**
+
+> **What:** Context for the team receiving this requirement.
+>
+> **How to fill:** Write 1–2 sentences summarising what the receiving team needs to know. Include:
+> - Any special conditions (shift timings, transport, accommodation)
+> - Start date if mentioned
+> - Employer preferences
+>
+> **Examples:**
+> - _"Day shift only, ₹12,500 + ESI/PF. Women preferred for line 3. Walk-in at Guntur unit."_
+> - _"Festive-season hiring, 60 heads, no qualification. Within 15 km of Gannavaram. Start 15 Sep."_
+> - _"APSSDC batch mobilisation started. Need 6S welding certification."_
+
+#### `new_status` (Column X) — Optional
+
+> **What:** Update the requirement status in the system.
+>
+> **How to fill:** Leave blank to keep status as-is. Enter one of:
+>
+> | Value | Meaning |
+> |-------|---------|
+> | `validated` | Requirement confirmed by employer but not handed over yet |
+> | `handed_over_scheduling` | Handing to Kaushalam Scheduling team |
+> | `handed_over_collector` | Handing to district Collector |
+> | `handed_over_apssdc` | Handing to APSSDC for training |
+> | `no_requirement` | Employer says no longer hiring for this role |
+> | `future` | Employer will hire later, not now |
+> | `not_operational` | Company is closed or not running |
+> | `do_not_call` | Employer asked not to be contacted |
+>
+> ⚠️ **If you set a `handed_over_*` status, make sure `required_count_validated`, `qualification`, `experience_from`, `experience_to`, `classification`, and `handoff_comment` are all filled.** The import will reject incomplete handoffs.
+
+---
+
+## Common Scenarios
+
+### Scenario 1: Employer confirms the requirement as-is
+
+> Company needs 60 Packing Helpers, no qualification, fresher, ₹11,000. Route via Collector.
+
+| Column | Value |
+|--------|-------|
+| required_count_validated | `60` |
+| qualification | _(ID for "No formal qualification" from master)_ |
+| experience_from | `0` |
+| experience_to | `0` |
+| salary | `11000` |
+| classification | `collector` |
+| collector_district | `Krishna` |
+| handoff_comment | `Festive hiring, 60 heads, no qualification. Start 15 Sep.` |
+| new_status | `handed_over_collector` |
+
+### Scenario 2: Employer says "not hiring right now, check in December"
+
+> Leave most columns blank. Just update the status.
+
+| Column | Value |
+|--------|-------|
+| new_status | `future` |
+
+_(All other editable columns left blank)_
+
+### Scenario 3: Employer confirms but not ready to hand off yet
+
+> You validated the details but want to call again before handing over.
+
+| Column | Value |
+|--------|-------|
+| required_count_validated | `25` |
+| qualification | _(ID from master)_ |
+| experience_from | `1` |
+| experience_to | `3` |
+| salary | `16000` |
+| new_status | `validated` |
+
+_(No classification or handoff_comment — not handing over yet)_
+
+### Scenario 4: Company is closed / not operational
+
+| Column | Value |
+|--------|-------|
+| new_status | `not_operational` |
+
+---
+
+## Rules to Remember
+
+1. **Never edit columns A–L** — they are reference data from EDB
+2. **Never delete the `requirement_id` column** — the system uses it to match rows
+3. **For handoffs** (`handed_over_*` status), all these must be filled:
+   - `required_count_validated`
+   - `qualification`
+   - `experience_from` and `experience_to`
+   - `classification`
+   - `handoff_comment`
+   - If `collector`: `collector_district`
+4. **Leave blank = no change** — if you don't know a value, leave the cell empty
+5. **One row = one role** — if you need to update two roles for the same company, fill both rows
+6. **Save as CSV (UTF-8)** when done — not `.xlsx`
+
+---
+
+## After You're Done
+
+1. Save the file as CSV
+2. Send it to the admin
+3. Admin runs the import, which will:
+   - Update all the requirement records you filled
+   - Mark tasks as completed for companies you validated
+   - Queue handoffs for the downstream teams
+4. Admin will share a report of what was updated and any errors

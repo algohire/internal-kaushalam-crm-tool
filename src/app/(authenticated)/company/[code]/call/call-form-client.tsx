@@ -264,7 +264,7 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
   });
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6">
       <div>
         <p className="text-xs text-muted-foreground">{company.companyCode}</p>
         <h1 className="text-xl font-semibold">Log a call — {company.companyName}</h1>

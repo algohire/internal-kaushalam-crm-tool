@@ -8,10 +8,10 @@ async function main() {
   const filePath = process.argv[2];
   if (!filePath) {
     console.error("Usage: npx tsx src/scripts/import-qualification-master.ts <csv-file>");
-    console.error("\nCSV format:");
-    console.error("  id,name");
-    console.error("  QUAL-001,10th Standard");
-    console.error("  QUAL-002,Intermediate / 12th");
+    console.error("\nCSV format (id is optional — UUID generated if missing):");
+    console.error("  name");
+    console.error("  10th Standard");
+    console.error("  Intermediate / 12th");
     process.exit(1);
   }
 
@@ -19,7 +19,7 @@ async function main() {
   const { qualificationMaster } = await import("../lib/db/schema");
 
   const raw = readFileSync(filePath, "utf-8").replace(/^﻿/, "");
-  const rows: { id: string; name: string }[] = parse(raw, {
+  const rows: Record<string, string>[] = parse(raw, {
     columns: true,
     skip_empty_lines: true,
     trim: true,
@@ -33,22 +33,25 @@ async function main() {
   let errors = 0;
 
   for (const row of rows) {
-    if (!row.id || !row.name) {
-      console.error(`  ERROR  Missing id or name: ${JSON.stringify(row)}`);
+    const name = row.name?.trim();
+    if (!name) {
+      console.error(`  ERROR  Missing name: ${JSON.stringify(row)}`);
       errors++;
       continue;
     }
 
+    const id = crypto.randomUUID();
+
     try {
       await db
         .insert(qualificationMaster)
-        .values({ id: row.id.trim(), name: row.name.trim(), createdAt: now })
+        .values({ id, name, createdAt: now })
         .onConflictDoNothing();
       inserted++;
-      console.log(`  OK     ${row.id} — ${row.name}`);
+      console.log(`  OK     ${id} — ${name}`);
     } catch {
       skipped++;
-      console.log(`  SKIP   ${row.id} — duplicate`);
+      console.log(`  SKIP   ${name} — duplicate`);
     }
   }
 

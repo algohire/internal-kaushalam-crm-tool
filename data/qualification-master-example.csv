@@ -1,14 +1,14 @@
-id,name
-QUAL-001,10th Standard
-QUAL-002,Intermediate / 12th
-QUAL-003,ITI Certificate
-QUAL-004,Diploma in Engineering
-QUAL-005,B.Tech / BE
-QUAL-006,No formal qualification
-QUAL-007,8th Standard
-QUAL-008,Graduate — Arts / Science / Commerce
-QUAL-009,Graduate — B.Sc
-QUAL-010,Graduate — B.Pharm
-QUAL-011,Post-graduate — M.Sc
-QUAL-012,Post-graduate — MBA / MCA / M.Tech
-QUAL-013,Post-graduate — M.Pharm
+name
+No formal qualification
+8th Standard
+10th Standard
+Intermediate / 12th
+ITI Certificate
+Diploma in Engineering
+Graduate — Arts / Science / Commerce
+Graduate — B.Sc
+Graduate — B.Tech / BE
+Graduate — B.Pharm
+Post-graduate — M.Sc
+Post-graduate — MBA / MCA / M.Tech
+Post-graduate — M.Pharm

@@ -7,19 +7,20 @@ async function main() {
   const now = new Date().toISOString();
 
   const demo = [
-    { id: "QUAL-001", name: "10th Standard" },
-    { id: "QUAL-002", name: "Intermediate / 12th" },
-    { id: "QUAL-003", name: "ITI Certificate" },
-    { id: "QUAL-004", name: "Diploma in Engineering" },
-    { id: "QUAL-005", name: "B.Tech / BE" },
+    "10th Standard",
+    "Intermediate / 12th",
+    "ITI Certificate",
+    "Diploma in Engineering",
+    "B.Tech / BE",
   ];
 
-  for (const q of demo) {
+  for (const name of demo) {
+    const id = crypto.randomUUID();
     try {
-      await db.insert(qualificationMaster).values({ ...q, createdAt: now }).onConflictDoNothing();
-      console.log(`  OK  ${q.id} — ${q.name}`);
-    } catch (err) {
-      console.log(`  SKIP ${q.id} — already exists`);
+      await db.insert(qualificationMaster).values({ id, name, createdAt: now }).onConflictDoNothing();
+      console.log(`  OK  ${id} — ${name}`);
+    } catch {
+      console.log(`  SKIP ${name} — already exists`);
     }
   }
 
