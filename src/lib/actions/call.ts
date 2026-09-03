@@ -20,22 +20,22 @@ import { ZodError } from "zod";
 export type RequirementUpdate = {
   id: string;
   roleName: string;
+  requiredCount?: number | null;
   roleNameEdited?: string;
   standardRole?: string;
   requiredCountValidated?: number | null;
   qualification?: string;
-  experience?: string;
+  experienceFrom?: number | null;
+  experienceTo?: number | null;
   genderPreference?: string;
   ageLimit?: string;
   salary?: string;
-  shift?: string;
-  monthlyIntake?: number | null;
+  pwd?: boolean;
   needTraining: boolean;
   qpCode?: string;
   classification?: string;
   collectorDistrict?: string;
   handoffComment?: string;
-  comment?: string;
   status?: string;
   handoff?: boolean;
 };
@@ -63,8 +63,9 @@ const TRACKED_FIELDS = [
   "genderPreference",
   "ageLimit",
   "salary",
-  "shift",
-  "monthlyIntake",
+  "experienceFrom",
+  "experienceTo",
+  "pwd",
   "needTraining",
   "qpCode",
   "classification",
@@ -176,12 +177,12 @@ export async function logCall(input: CallInput) {
           standardRole: reqUpdate.standardRole || null,
           requiredCountValidated: reqUpdate.requiredCountValidated ?? null,
           qualification: reqUpdate.qualification || null,
-          experience: reqUpdate.experience || null,
+          experienceFrom: reqUpdate.experienceFrom ?? null,
+          experienceTo: reqUpdate.experienceTo ?? null,
           genderPreference: reqUpdate.genderPreference || null,
           ageLimit: reqUpdate.ageLimit || null,
           salary: reqUpdate.salary || null,
-          shift: reqUpdate.shift || null,
-          monthlyIntake: reqUpdate.monthlyIntake ?? null,
+          pwd: reqUpdate.pwd ?? false,
           needTraining: reqUpdate.needTraining,
           qpCode: reqUpdate.qpCode || null,
           classification: reqUpdate.classification || null,
@@ -190,7 +191,7 @@ export async function logCall(input: CallInput) {
           handoffComment: reqUpdate.handoffComment || null,
           handedOverAt: reqUpdate.handoff ? now : null,
           handedOverBy: reqUpdate.handoff ? username : null,
-          comment: reqUpdate.comment || null,
+          comment: reqUpdate.handoffComment || null,
           timing: input.timing || null,
           timingDate: input.timingDate || null,
           flags: "added_by_caller",
@@ -238,18 +239,18 @@ export async function logCall(input: CallInput) {
           standardRole: reqUpdate.standardRole || null,
           requiredCountValidated: reqUpdate.requiredCountValidated ?? null,
           qualification: reqUpdate.qualification || null,
-          experience: reqUpdate.experience || null,
+          experienceFrom: reqUpdate.experienceFrom ?? null,
+          experienceTo: reqUpdate.experienceTo ?? null,
           genderPreference: reqUpdate.genderPreference || null,
           ageLimit: reqUpdate.ageLimit || null,
           salary: reqUpdate.salary || null,
-          shift: reqUpdate.shift || null,
-          monthlyIntake: reqUpdate.monthlyIntake ?? null,
+          pwd: reqUpdate.pwd ?? false,
           needTraining: reqUpdate.needTraining,
           qpCode: reqUpdate.qpCode || null,
           classification: reqUpdate.classification || null,
           collectorDistrict: reqUpdate.collectorDistrict || null,
           handoffComment: reqUpdate.handoffComment || null,
-          comment: reqUpdate.comment || null,
+          comment: reqUpdate.handoffComment || null,
           status: reqStatus,
           timing: input.timing || null,
           timingDate: input.timingDate || null,

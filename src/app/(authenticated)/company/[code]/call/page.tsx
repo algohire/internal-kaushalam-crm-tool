@@ -4,8 +4,9 @@ import {
   company as companyTable,
   contact as contactTable,
   requirement as requirementTable,
+  qualificationMaster,
 } from "@/lib/db/schema";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, asc } from "drizzle-orm";
 import { requireAuth } from "@/lib/auth-utils";
 import { CallFormClient } from "./call-form-client";
 
@@ -47,12 +48,12 @@ export default async function LogCallPage({
       requiredCount: requirementTable.requiredCount,
       requiredCountValidated: requirementTable.requiredCountValidated,
       qualification: requirementTable.qualification,
-      experience: requirementTable.experience,
+      experienceFrom: requirementTable.experienceFrom,
+      experienceTo: requirementTable.experienceTo,
       genderPreference: requirementTable.genderPreference,
       ageLimit: requirementTable.ageLimit,
       salary: requirementTable.salary,
-      shift: requirementTable.shift,
-      monthlyIntake: requirementTable.monthlyIntake,
+      pwd: requirementTable.pwd,
       needTraining: requirementTable.needTraining,
       qpCode: requirementTable.qpCode,
       classification: requirementTable.classification,
@@ -71,11 +72,17 @@ export default async function LogCallPage({
       )
     );
 
+  const qualifications = await db
+    .select({ id: qualificationMaster.id, name: qualificationMaster.name })
+    .from(qualificationMaster)
+    .orderBy(asc(qualificationMaster.name));
+
   return (
     <CallFormClient
       company={companyRow}
       contacts={contacts}
       requirements={requirements}
+      qualificationOptions={qualifications}
     />
   );
 }

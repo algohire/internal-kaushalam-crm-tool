@@ -7,6 +7,7 @@ import {
   requirementVersion,
   interaction,
   task,
+  qualificationMaster,
 } from "@/lib/db/schema";
 import { eq, and, desc, asc, count, sql } from "drizzle-orm";
 import { CompanyPageClient } from "./company-page-client";
@@ -88,6 +89,12 @@ export default async function CompanyPage({
   const latestOpenTask = openTasks[0] ?? null;
   const currentTags = comp.tags?.split(";").filter(Boolean) ?? [];
 
+  const qualRows = await db
+    .select({ id: qualificationMaster.id, name: qualificationMaster.name })
+    .from(qualificationMaster);
+  const qualMap: Record<string, string> = {};
+  for (const q of qualRows) qualMap[q.id] = q.name;
+
   return (
     <CompanyPageClient
       company={comp}
@@ -102,6 +109,7 @@ export default async function CompanyPage({
       timelineTotal={timelineTotal}
       timelinePage={tlPage}
       timelinePageSize={TIMELINE_PAGE_SIZE}
+      qualificationMap={qualMap}
     />
   );
 }

@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { formatDateIST } from "@/lib/date-utils";
+import { toggleBookmark } from "@/lib/actions/company";
+import { Bookmark } from "lucide-react";
 
 export interface CompanyRow {
   companyCode: string;
@@ -29,6 +31,7 @@ export interface CompanyRow {
   lastContactAt: string | null;
   contactCount: number;
   requirementCount: number;
+  bookmarked: boolean;
 }
 
 interface CompanyTableProps {
@@ -63,6 +66,7 @@ export function CompanyTable({
               <TableHead>Last contact</TableHead>
               <TableHead className="text-right">Calls</TableHead>
               <TableHead>Tags</TableHead>
+              <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -165,6 +169,24 @@ export function CompanyTable({
                         </span>
                       ))}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        toggleBookmark(c.companyCode);
+                      }}
+                      className="p-1 rounded hover:bg-muted"
+                      title={c.bookmarked ? "Remove bookmark" : "Bookmark"}
+                    >
+                      <Bookmark
+                        className={`w-4 h-4 ${
+                          c.bookmarked
+                            ? "fill-[#D9601F] text-[#D9601F]"
+                            : "text-muted-foreground"
+                        }`}
+                      />
+                    </button>
                   </TableCell>
                 </TableRow>
               );

@@ -35,9 +35,12 @@ export function Classification({ requirements, onUpdate }: Props) {
                       name={`classification-${idx}`}
                       value={cls.code}
                       checked={req.classification === cls.code}
-                      onChange={(e) =>
-                        onUpdate(idx, "classification", e.target.value)
-                      }
+                      onChange={(e) => {
+                        onUpdate(idx, "classification", e.target.value);
+                        if (e.target.value === "apssdc") {
+                          onUpdate(idx, "needTraining", true);
+                        }
+                      }}
                     />
                     {cls.label}
                   </label>
@@ -52,7 +55,9 @@ export function Classification({ requirements, onUpdate }: Props) {
                   <span className="text-destructive">*</span>
                 </Label>
                 <select
-                  className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm"
+                  className={`w-full rounded-md border bg-background px-2.5 py-1.5 text-sm ${
+                    !req.collectorDistrict ? "border-red-400 bg-red-50/50 ring-1 ring-red-200" : "border-input"
+                  }`}
                   value={req.collectorDistrict || ""}
                   onChange={(e) =>
                     onUpdate(idx, "collectorDistrict", e.target.value)
@@ -69,28 +74,15 @@ export function Classification({ requirements, onUpdate }: Props) {
             )}
 
             {req.classification === "apssdc" && (
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={req.needTraining}
-                    onChange={(e) =>
-                      onUpdate(idx, "needTraining", e.target.checked)
-                    }
-                  />
-                  Flag for APSSDC training{" "}
-                  <span className="text-destructive">*</span>
-                </label>
-                <div className="space-y-1 max-w-xs">
-                  <Label className="text-xs">QP code (optional)</Label>
-                  <input
-                    type="text"
-                    className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm"
-                    value={req.qpCode || ""}
-                    onChange={(e) => onUpdate(idx, "qpCode", e.target.value)}
-                    placeholder="e.g. FIC/Q0101"
-                  />
-                </div>
+              <div className="space-y-1 max-w-xs">
+                <Label className="text-xs">QP code (optional)</Label>
+                <input
+                  type="text"
+                  className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm"
+                  value={req.qpCode || ""}
+                  onChange={(e) => onUpdate(idx, "qpCode", e.target.value)}
+                  placeholder="e.g. FIC/Q0101"
+                />
               </div>
             )}
 
@@ -100,7 +92,11 @@ export function Classification({ requirements, onUpdate }: Props) {
                 <span className="text-destructive">*</span>
               </Label>
               <textarea
-                className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm min-h-[60px] resize-y"
+                className={`w-full rounded-md border bg-background px-2.5 py-1.5 text-sm min-h-[60px] resize-y ${
+                  req.classification && !req.handoffComment?.trim()
+                    ? "border-red-400 bg-red-50/50 ring-1 ring-red-200"
+                    : "border-input"
+                }`}
                 value={req.handoffComment || ""}
                 onChange={(e) =>
                   onUpdate(idx, "handoffComment", e.target.value)

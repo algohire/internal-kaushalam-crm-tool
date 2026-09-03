@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "./searchable-select";
-import { X, Search } from "lucide-react";
+import { X, Search, Bookmark } from "lucide-react";
 
 export interface FilterOptions {
   districts: string[];
@@ -157,6 +157,16 @@ export function UniverseFilters({ options }: FiltersProps) {
           <option value="60d">No contact in 60 days</option>
           <option value="month">Contacted this month</option>
         </select>
+
+        <Button
+          variant={searchParams.get("bookmarked") === "1" ? "default" : "outline"}
+          size="sm"
+          className={`h-9 gap-1.5 ${searchParams.get("bookmarked") === "1" ? "bg-[#D9601F] hover:bg-[#C05018] text-white" : ""}`}
+          onClick={() => updateParam("bookmarked", searchParams.get("bookmarked") === "1" ? "" : "1")}
+        >
+          <Bookmark className="w-3.5 h-3.5" />
+          Bookmarked
+        </Button>
 
         {hasFilters && (
           <Button variant="outline" size="sm" onClick={clearFilters} className="h-9 gap-1.5">

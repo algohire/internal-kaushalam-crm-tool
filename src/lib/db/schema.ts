@@ -72,6 +72,14 @@ export const verification = pgTable("verification", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ── Masters ──
+
+export const qualificationMaster = pgTable("qualification_master", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  createdAt: text("created_at").notNull(),
+});
+
 // ── Import bookkeeping ──
 
 export const importBatch = pgTable("import_batch", {
@@ -131,6 +139,7 @@ export const company = pgTable(
     tier: integer("tier"),
     flags: text("flags"),
     tags: text("tags"),
+    bookmarkedBy: text("bookmarked_by"),
     lastDisposition: text("last_disposition"),
     lastContactAt: text("last_contact_at"),
     contactCount: integer("contact_count").notNull().default(0),
@@ -202,8 +211,9 @@ export const requirement = pgTable(
     genderPreference: text("gender_preference"),
     ageLimit: text("age_limit"),
     salary: text("salary"),
-    shift: text("shift"),
-    monthlyIntake: integer("monthly_intake"),
+    experienceFrom: integer("experience_from"),
+    experienceTo: integer("experience_to"),
+    pwd: boolean("pwd").default(false),
     needTraining: boolean("need_training").notNull().default(false),
     qpCode: text("qp_code"),
     classification: text("classification"),

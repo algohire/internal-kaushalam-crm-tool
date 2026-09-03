@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 const periods = [
   { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
   { value: "week", label: "This Week" },
   { value: "month", label: "This Month" },
   { value: "all", label: "All Time" },
@@ -12,7 +13,7 @@ const periods = [
 export function PeriodSelector() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const current = searchParams.get("period") || "week";
+  const current = searchParams.get("period") || "today";
 
   function handleChange(value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -21,7 +22,7 @@ export function PeriodSelector() {
   }
 
   return (
-    <div className="flex gap-1 bg-muted rounded-lg p-1">
+    <div className="flex gap-0.5 bg-muted rounded-lg p-1">
       {periods.map((p) => (
         <button
           key={p.value}

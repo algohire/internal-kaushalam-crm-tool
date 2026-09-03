@@ -68,12 +68,12 @@ type Props = {
     skills: string | null;
     currentEmployment: number | null;
     qualification: string | null;
-    experience: string | null;
+    experienceFrom: number | null;
+    experienceTo: number | null;
     genderPreference: string | null;
     ageLimit: string | null;
     salary: string | null;
-    shift: string | null;
-    monthlyIntake: number | null;
+    pwd: boolean | null;
     timing: string | null;
     timingDate: string | null;
     needTraining: boolean;
@@ -115,6 +115,7 @@ type Props = {
   timelineTotal: number;
   timelinePage: number;
   timelinePageSize: number;
+  qualificationMap?: Record<string, string>;
 };
 
 export function CompanyPageClient({
@@ -130,6 +131,7 @@ export function CompanyPageClient({
   timelineTotal,
   timelinePage,
   timelinePageSize,
+  qualificationMap,
 }: Props) {
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
 
@@ -188,7 +190,7 @@ export function CompanyPageClient({
             onDialogChange={setContactDialogOpen}
           />
 
-          <RequirementsList requirements={requirements} />
+          <RequirementsList requirements={requirements} qualificationMap={qualificationMap} />
 
           <VersionHistory versions={versions} requirementNames={requirementNames} />
         </div>

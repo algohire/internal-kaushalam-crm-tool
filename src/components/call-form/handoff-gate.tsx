@@ -34,7 +34,7 @@ function getGateChecks(
     },
     {
       label: "Experience",
-      passed: !!req.experience,
+      passed: req.experienceFrom != null && req.experienceTo != null,
     },
     {
       label: "Classification",
@@ -54,13 +54,6 @@ function getGateChecks(
     checks.push({
       label: "Collector district",
       passed: !!req.collectorDistrict,
-    });
-  }
-
-  if (req.classification === "apssdc") {
-    checks.push({
-      label: "Need training flagged",
-      passed: req.needTraining,
     });
   }
 

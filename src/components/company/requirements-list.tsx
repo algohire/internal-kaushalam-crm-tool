@@ -12,12 +12,12 @@ type Requirement = {
   skills: string | null;
   currentEmployment: number | null;
   qualification: string | null;
-  experience: string | null;
+  experienceFrom: number | null;
+  experienceTo: number | null;
   genderPreference: string | null;
   ageLimit: string | null;
   salary: string | null;
-  shift: string | null;
-  monthlyIntake: number | null;
+  pwd: boolean | null;
   timing: string | null;
   timingDate: string | null;
   needTraining: boolean;
@@ -75,7 +75,7 @@ function Field({ label, value }: { label: string; value: string | number | null 
   );
 }
 
-export function RequirementsList({ requirements }: { requirements: Requirement[] }) {
+export function RequirementsList({ requirements, qualificationMap }: { requirements: Requirement[]; qualificationMap?: Record<string, string> }) {
   const totalOpenings = requirements.reduce((sum, r) => sum + (r.requiredCountValidated ?? r.requiredCount ?? 0), 0);
 
   return (
@@ -108,13 +108,16 @@ export function RequirementsList({ requirements }: { requirements: Requirement[]
                 <Field label="Validated count" value={req.requiredCountValidated} />
                 <Field label="Within months" value={req.requiredWithinMonths} />
                 <Field label="Current employment" value={req.currentEmployment} />
-                <Field label="Qualification" value={req.qualification} />
-                <Field label="Experience" value={req.experience} />
+                <Field label="Qualification" value={
+                  req.qualification && qualificationMap
+                    ? req.qualification.split(";").map((id) => qualificationMap[id] || id).join(", ")
+                    : req.qualification
+                } />
                 <Field label="Gender" value={req.genderPreference} />
                 <Field label="Age limit" value={req.ageLimit} />
                 <Field label="Salary" value={req.salary} />
-                <Field label="Shift" value={req.shift} />
-                <Field label="Monthly intake" value={req.monthlyIntake} />
+                <Field label="Experience" value={req.experienceFrom != null && req.experienceTo != null ? `${req.experienceFrom}–${req.experienceTo} yrs` : null} />
+                <Field label="PWD" value={req.pwd ? "Yes" : "No"} />
                 <Field label="Timing" value={req.timing} />
                 {req.timing === "later" && <Field label="Timing date" value={req.timingDate} />}
                 <Field label="Standard role" value={req.standardRole} />

@@ -30,7 +30,7 @@ export default async function UniversePage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireAuth();
+  const session = await requireAuth();
   const params = await searchParams;
 
   const q = param(params, "q");
@@ -44,6 +44,7 @@ export default async function UniversePage({
   const status = param(params, "status");
   const tags = param(params, "tags");
   const worked = param(params, "worked");
+  const bookmarked = param(params, "bookmarked");
   const page = Math.max(1, parseInt(param(params, "page") || "1", 10) || 1);
 
   // Build WHERE conditions
@@ -92,6 +93,11 @@ export default async function UniversePage({
   } else if (worked === "month") {
     const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
     conditions.push(gt(company.lastContactAt, firstOfMonth));
+  }
+
+  // Bookmark filter
+  if (bookmarked === "1") {
+    conditions.push(like(company.bookmarkedBy, `%${session.user.id}%`));
   }
 
   // Classification + status filters (via requirement subquery)
@@ -186,6 +192,7 @@ export default async function UniversePage({
     lastContactAt: r.lastContactAt,
     contactCount: r.contactCount,
     requirementCount: reqCounts[r.companyCode] ?? 0,
+    bookmarked: r.bookmarkedBy ? r.bookmarkedBy.split(";").includes(session.user.id) : false,
   }));
 
   const filterOptions: FilterOptions = {

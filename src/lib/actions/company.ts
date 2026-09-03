@@ -41,3 +41,35 @@ export async function updateCompanyTags(companyCode: string, newTags: string[]) 
 
   revalidatePath(`/company/${companyCode}`);
 }
+
+export async function toggleBookmark(companyCode: string) {
+  const session = await requireAuth();
+  const now = utcNow();
+  const userId = session.user.id;
+
+  const [co] = await db
+    .select({ bookmarkedBy: company.bookmarkedBy })
+    .from(company)
+    .where(eq(company.companyCode, companyCode));
+
+  if (!co) return { error: "Company not found" };
+
+  const currentIds = co.bookmarkedBy ? co.bookmarkedBy.split(";").filter(Boolean) : [];
+  const isBookmarked = currentIds.includes(userId);
+
+  const newIds = isBookmarked
+    ? currentIds.filter((id) => id !== userId)
+    : [...currentIds, userId];
+
+  await db
+    .update(company)
+    .set({
+      bookmarkedBy: newIds.length > 0 ? newIds.join(";") : null,
+      updatedAt: now,
+    })
+    .where(eq(company.companyCode, companyCode));
+
+  revalidatePath("/universe");
+  revalidatePath(`/company/${companyCode}`);
+  return { bookmarked: !isBookmarked };
+}
