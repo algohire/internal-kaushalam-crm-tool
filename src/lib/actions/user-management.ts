@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { user } from "@/lib/db/schema";
+import { user, account } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth-utils";
 import { headers } from "next/headers";
