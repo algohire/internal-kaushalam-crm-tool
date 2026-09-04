@@ -1,6 +1,6 @@
 "use server";
 
-import { dbPool as db } from "@/lib/db";
+import { db } from "@/lib/db";
 import { requireAuth, utcNow, todayDate } from "@/lib/auth-utils";
 import {
   interaction,
