@@ -18,67 +18,40 @@ export default async function LogCallPage({
   await requireAuth();
   const { code } = await params;
 
-  const [companyRow] = await db
-    .select({
-      companyCode: companyTable.companyCode,
-      companyName: companyTable.companyName,
-    })
-    .from(companyTable)
-    .where(eq(companyTable.companyCode, code));
-
-  if (!companyRow) notFound();
-
-  const contacts = await db
-    .select({
-      id: contactTable.id,
-      name: contactTable.name,
-      designation: contactTable.designation,
-      mobile: contactTable.mobile,
-      valid: contactTable.valid,
-    })
-    .from(contactTable)
-    .where(eq(contactTable.companyCode, code));
-
-  const requirements = await db
-    .select({
-      id: requirementTable.id,
-      roleName: requirementTable.roleName,
-      roleNameEdited: requirementTable.roleNameEdited,
-      requiredCount: requirementTable.requiredCount,
+  // All queries in parallel
+  const [companyRows, contacts, requirements, qualifications] = await Promise.all([
+    db.select({ companyCode: companyTable.companyCode, companyName: companyTable.companyName })
+      .from(companyTable).where(eq(companyTable.companyCode, code)),
+    db.select({
+      id: contactTable.id, name: contactTable.name, designation: contactTable.designation,
+      mobile: contactTable.mobile, valid: contactTable.valid,
+    }).from(contactTable).where(eq(contactTable.companyCode, code)),
+    db.select({
+      id: requirementTable.id, roleName: requirementTable.roleName,
+      roleNameEdited: requirementTable.roleNameEdited, requiredCount: requirementTable.requiredCount,
       requiredCountValidated: requirementTable.requiredCountValidated,
-      qualification: requirementTable.qualification,
-      experienceFrom: requirementTable.experienceFrom,
-      experienceTo: requirementTable.experienceTo,
-      genderPreference: requirementTable.genderPreference,
-      ageLimit: requirementTable.ageLimit,
-      salary: requirementTable.salary,
-      pwd: requirementTable.pwd,
-      needTraining: requirementTable.needTraining,
-      qpCode: requirementTable.qpCode,
-      classification: requirementTable.classification,
-      collectorDistrict: requirementTable.collectorDistrict,
-      handoffComment: requirementTable.handoffComment,
-      comment: requirementTable.comment,
+      qualification: requirementTable.qualification, experienceFrom: requirementTable.experienceFrom,
+      experienceTo: requirementTable.experienceTo, genderPreference: requirementTable.genderPreference,
+      ageLimit: requirementTable.ageLimit, salary: requirementTable.salary, pwd: requirementTable.pwd,
+      needTraining: requirementTable.needTraining, qpCode: requirementTable.qpCode,
+      classification: requirementTable.classification, collectorDistrict: requirementTable.collectorDistrict,
+      handoffComment: requirementTable.handoffComment, comment: requirementTable.comment,
       status: requirementTable.status,
-    })
-    .from(requirementTable)
-    .where(
-      and(
-        eq(requirementTable.companyCode, code),
-        ne(requirementTable.status, "handed_over_scheduling"),
-        ne(requirementTable.status, "handed_over_collector"),
-        ne(requirementTable.status, "handed_over_apssdc")
-      )
-    );
+    }).from(requirementTable).where(and(
+      eq(requirementTable.companyCode, code),
+      ne(requirementTable.status, "handed_over_scheduling"),
+      ne(requirementTable.status, "handed_over_collector"),
+      ne(requirementTable.status, "handed_over_apssdc"),
+    )),
+    db.select({ id: qualificationMaster.id, name: qualificationMaster.name })
+      .from(qualificationMaster).orderBy(asc(qualificationMaster.name)),
+  ]);
 
-  const qualifications = await db
-    .select({ id: qualificationMaster.id, name: qualificationMaster.name })
-    .from(qualificationMaster)
-    .orderBy(asc(qualificationMaster.name));
+  if (companyRows.length === 0) notFound();
 
   return (
     <CallFormClient
-      company={companyRow}
+      company={companyRows[0]}
       contacts={contacts}
       requirements={requirements}
       qualificationOptions={qualifications}

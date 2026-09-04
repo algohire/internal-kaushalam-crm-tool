@@ -25,19 +25,16 @@ export default async function CompanyPage({
   const sp = await searchParams;
   const tlPage = Math.max(1, parseInt(typeof sp.tlPage === "string" ? sp.tlPage : "1", 10) || 1);
 
-  const comp = await db.query.company.findFirst({
-    where: eq(company.companyCode, code),
-  });
-
-  if (!comp) notFound();
-
   const [
+    comp,
     contacts,
     requirements,
     [{ timelineTotal }],
     interactions,
     openTasks,
+    qualRows,
   ] = await Promise.all([
+    db.query.company.findFirst({ where: eq(company.companyCode, code) }),
     db
       .select()
       .from(contact)
@@ -64,7 +61,10 @@ export default async function CompanyPage({
       .from(task)
       .where(and(eq(task.companyCode, code), eq(task.status, "open")))
       .orderBy(asc(task.dueDate)),
+    db.select({ id: qualificationMaster.id, name: qualificationMaster.name }).from(qualificationMaster),
   ]);
+
+  if (!comp) notFound();
 
   const reqIds = requirements.map((r) => r.id);
   let versions: (typeof requirementVersion.$inferSelect)[] = [];
@@ -89,9 +89,6 @@ export default async function CompanyPage({
   const latestOpenTask = openTasks[0] ?? null;
   const currentTags = comp.tags?.split(";").filter(Boolean) ?? [];
 
-  const qualRows = await db
-    .select({ id: qualificationMaster.id, name: qualificationMaster.name })
-    .from(qualificationMaster);
   const qualMap: Record<string, string> = {};
   for (const q of qualRows) qualMap[q.id] = q.name;
 

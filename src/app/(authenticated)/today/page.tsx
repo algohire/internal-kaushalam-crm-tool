@@ -42,27 +42,23 @@ export default async function TodayPage({
   const activeTab = (typeof params.taskTab === "string" ? params.taskTab : "today") as "today" | "week" | "unassigned";
   const taskPage = Math.max(1, parseInt(typeof params.taskPage === "string" ? params.taskPage : "1", 10) || 1);
 
-  // ── KPI queries (unchanged) ──
-  const [dueTodayResult] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(task)
-    .where(and(eq(task.status, "open"), lte(task.dueDate, today), or(eq(task.userId, userId), isNull(task.userId))));
-
-  const [overdueResult] = await db
-    .select({ count: sql<number>`count(*)::int`, oldestDate: sql<string>`min(${task.dueDate})` })
-    .from(task)
-    .where(and(eq(task.status, "open"), lt(task.dueDate, today), or(eq(task.userId, userId), isNull(task.userId))));
-
-  const [validatedResult] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(requirement)
-    .where(and(sql`${requirement.requiredCountValidated} is not null`, sql`${requirement.updatedAt} >= ${monday}`));
-
-  const handedOverRows = await db
-    .select({ status: requirement.status, count: sql<number>`count(*)::int` })
-    .from(requirement)
-    .where(and(sql`${requirement.status} like 'handed_over_%'`, sql`${requirement.handedOverAt} >= ${monday}`))
-    .groupBy(requirement.status);
+  // ── KPI queries (parallel) ──
+  const [
+    [dueTodayResult],
+    [overdueResult],
+    [validatedResult],
+    handedOverRows,
+  ] = await Promise.all([
+    db.select({ count: sql<number>`count(*)::int` }).from(task)
+      .where(and(eq(task.status, "open"), lte(task.dueDate, today), or(eq(task.userId, userId), isNull(task.userId)))),
+    db.select({ count: sql<number>`count(*)::int`, oldestDate: sql<string>`min(${task.dueDate})` }).from(task)
+      .where(and(eq(task.status, "open"), lt(task.dueDate, today), or(eq(task.userId, userId), isNull(task.userId)))),
+    db.select({ count: sql<number>`count(*)::int` }).from(requirement)
+      .where(and(sql`${requirement.requiredCountValidated} is not null`, sql`${requirement.updatedAt} >= ${monday}`)),
+    db.select({ status: requirement.status, count: sql<number>`count(*)::int` }).from(requirement)
+      .where(and(sql`${requirement.status} like 'handed_over_%'`, sql`${requirement.handedOverAt} >= ${monday}`))
+      .groupBy(requirement.status),
+  ]);
 
   const handedOverByRoute = { scheduling: 0, collector: 0, apssdc: 0 };
   for (const row of handedOverRows) {
@@ -97,28 +93,33 @@ export default async function TodayPage({
     orderBy = asc(company.companyRank);
   }
 
-  // ── Count + paginated query ──
-  const [{ total }] = await db.select({ total: sql<number>`count(*)::int` }).from(task).innerJoin(company, eq(task.companyCode, company.companyCode)).where(tabCondition);
+  // ── Count + paginated query + handed over (parallel) ──
+  const [
+    [{ total }],
+    openTasks,
+    handedOverItems,
+  ] = await Promise.all([
+    db.select({ total: sql<number>`count(*)::int` }).from(task)
+      .innerJoin(company, eq(task.companyCode, company.companyCode)).where(tabCondition),
+    db.select({
+      id: task.id, companyCode: task.companyCode, companyName: company.companyName,
+      sector: company.sector, district: company.district, title: task.title,
+      source: task.source, dueDate: task.dueDate, userId: task.userId, companyRank: company.companyRank,
+    }).from(task).innerJoin(company, eq(task.companyCode, company.companyCode))
+      .where(tabCondition).orderBy(orderBy).limit(TASK_PAGE_SIZE).offset((taskPage - 1) * TASK_PAGE_SIZE),
+    db.select({
+      companyCode: requirement.companyCode, companyName: company.companyName,
+      roleName: requirement.roleName, classification: requirement.classification,
+    }).from(requirement).innerJoin(company, eq(requirement.companyCode, company.companyCode))
+      .where(and(sql`${requirement.status} like 'handed_over_%'`, sql`${requirement.handedOverAt} >= ${monday}`)),
+  ]);
 
-  const openTasks = await db
-    .select({
-      id: task.id,
-      companyCode: task.companyCode,
-      companyName: company.companyName,
-      sector: company.sector,
-      district: company.district,
-      title: task.title,
-      source: task.source,
-      dueDate: task.dueDate,
-      userId: task.userId,
-      companyRank: company.companyRank,
-    })
-    .from(task)
-    .innerJoin(company, eq(task.companyCode, company.companyCode))
-    .where(tabCondition)
-    .orderBy(orderBy)
-    .limit(TASK_PAGE_SIZE)
-    .offset((taskPage - 1) * TASK_PAGE_SIZE);
+  const handedOverData: HandedOverItem[] = handedOverItems.map((r) => ({
+    companyCode: r.companyCode,
+    companyName: r.companyName,
+    roleName: r.roleName,
+    classification: r.classification,
+  }));
 
   const tasks: TaskRow[] = openTasks.map((row) => ({
     id: row.id,
@@ -132,25 +133,6 @@ export default async function TodayPage({
     overdueDays: row.dueDate < today ? daysBetween(row.dueDate) : 0,
     userId: row.userId,
     companyRank: row.companyRank,
-  }));
-
-  // ── Handed over this week ──
-  const handedOverItems = await db
-    .select({
-      companyCode: requirement.companyCode,
-      companyName: company.companyName,
-      roleName: requirement.roleName,
-      classification: requirement.classification,
-    })
-    .from(requirement)
-    .innerJoin(company, eq(requirement.companyCode, company.companyCode))
-    .where(and(sql`${requirement.status} like 'handed_over_%'`, sql`${requirement.handedOverAt} >= ${monday}`));
-
-  const handedOverData: HandedOverItem[] = handedOverItems.map((r) => ({
-    companyCode: r.companyCode,
-    companyName: r.companyName,
-    roleName: r.roleName,
-    classification: r.classification,
   }));
 
   return (
