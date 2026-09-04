@@ -1,9 +1,14 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import { neon, Pool } from "@neondatabase/serverless";
+import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
+import { drizzle as drizzlePool } from "drizzle-orm/neon-serverless";
 import * as schema from "./schema";
 
-const sql = neon(process.env.DATABASE_URL!);
+const connectionString = process.env.DATABASE_URL!;
 
-// Single HTTP driver for everything — reads AND transactions.
-// Neon HTTP batches transaction statements into one HTTP request.
-export const db = drizzle(sql, { schema });
+// HTTP driver for reads — no connection overhead, single HTTP request per query
+const sql = neon(connectionString);
+export const db = drizzleHttp(sql, { schema });
+
+// Pool driver for transactions — lazy connect, only used by logCall
+const pool = new Pool({ connectionString });
+export const dbPool = drizzlePool(pool, { schema });
