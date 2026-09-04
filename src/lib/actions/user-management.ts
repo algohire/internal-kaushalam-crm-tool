@@ -3,7 +3,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth-utils";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -85,15 +85,14 @@ export async function resetPassword(userId: string, newPassword: string) {
 
   await requireAdmin();
 
-  const { hash } = await import("@node-rs/argon2");
-  const account = await import("@/lib/db/schema").then((s) => s.account);
+  const { hashPassword } = await import("@better-auth/utils/password");
 
-  const passwordHash = await hash(newPassword);
+  const passwordHash = await hashPassword(newPassword);
 
   await db
     .update(account)
     .set({ password: passwordHash, updatedAt: new Date() })
-    .where(eq(account.userId, userId));
+    .where(and(eq(account.userId, userId), eq(account.providerId, "credential")));
 
   revalidatePath("/admin/users");
   return { success: true };
