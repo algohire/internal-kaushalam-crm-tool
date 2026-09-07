@@ -5,6 +5,8 @@ import { eq, like, and, gte, lte, sql, count } from "drizzle-orm";
 import { requireAuth, formatDateIST } from "@/lib/auth-utils";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { ExportButton } from "@/components/handed-over/export-button";
+import { Suspense } from "react";
 import {
   Table,
   TableBody,
@@ -122,6 +124,9 @@ export default async function HandedOverPage({
             Requirements handed over for placement. {total.toLocaleString()} records.
           </p>
         </div>
+        <Suspense fallback={null}>
+          <ExportButton />
+        </Suspense>
       </div>
 
       <form className="flex items-end gap-3 mb-4">
