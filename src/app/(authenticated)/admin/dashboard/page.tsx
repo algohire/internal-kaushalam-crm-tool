@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { company, interaction, requirement, task, user } from "@/lib/db/schema";
+import { company, interaction, requirement, task, user, qualificationMaster } from "@/lib/db/schema";
 import { eq, and, gte, gt, like, isNotNull, sql, count, sum, lt, desc } from "drizzle-orm";
 import { requireAdmin, todayDate } from "@/lib/auth-utils";
 import { KpiCards } from "@/components/admin/kpi-cards";
@@ -97,6 +97,7 @@ export default async function AdminDashboardPage({
     tierBreakdown,
     // Openings by qualification
     qualificationBreakdown,
+    qualMasterRows,
   ] = await Promise.all([
     db.select({ value: count() }).from(company),
     db.select({ value: sql<number>`COUNT(DISTINCT ${interaction.companyCode})` })
@@ -213,6 +214,10 @@ export default async function AdminDashboardPage({
       .where(isNotNull(requirement.qualification))
       .groupBy(requirement.qualification)
       .orderBy(desc(sql`COALESCE(SUM(${requirement.requiredCountValidated}), 0)`)),
+
+    // Qualification master for name resolution
+    db.select({ id: qualificationMaster.id, name: qualificationMaster.name })
+      .from(qualificationMaster),
   ]);
 
   // Per-caller enrichment
@@ -250,6 +255,20 @@ export default async function AdminDashboardPage({
   const attempted = Number(attemptedResult[0]?.value) || 0;
   const connected = Number(connectedResult[0]?.value) || 0;
   const totalCalls = totalCallsResult[0]?.value ?? 0;
+
+  // Resolve qualification IDs to names
+  const qualMap: Record<string, string> = {};
+  for (const q of qualMasterRows) qualMap[q.id] = q.name;
+
+  function resolveQualNames(raw: string | null): string {
+    if (!raw) return "—";
+    return raw.split(";").map((id) => qualMap[id.trim()] || id.trim()).join(", ");
+  }
+
+  const qualBreakdownResolved = qualificationBreakdown.map((q) => ({
+    ...q,
+    qualificationLabel: resolveQualNames(q.qualification),
+  }));
 
   const kpis = [
     { label: "Total Companies", value: totalCompanies },
@@ -413,14 +432,14 @@ export default async function AdminDashboardPage({
                 </tr>
               </thead>
               <tbody>
-                {qualificationBreakdown.map((q) => (
-                  <tr key={q.qualification} className="border-b last:border-0">
-                    <td className="px-4 py-1.5">{q.qualification || "—"}</td>
+                {qualBreakdownResolved.map((q, i) => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="px-4 py-1.5">{q.qualificationLabel}</td>
                     <td className="text-right px-4 py-1.5 tabular-nums">{q.roles}</td>
                     <td className="text-right px-4 py-1.5 tabular-nums font-medium">{Number(q.openings).toLocaleString()}</td>
                   </tr>
                 ))}
-                {qualificationBreakdown.length === 0 && (
+                {qualBreakdownResolved.length === 0 && (
                   <tr><td colSpan={3} className="text-center text-muted-foreground py-6 text-sm">No validated requirements yet</td></tr>
                 )}
               </tbody>
