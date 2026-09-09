@@ -41,6 +41,8 @@ export default async function TodayPage({
 
   const activeTab = (typeof params.taskTab === "string" ? params.taskTab : "today") as "today" | "week" | "unassigned";
   const taskPage = Math.max(1, parseInt(typeof params.taskPage === "string" ? params.taskPage : "1", 10) || 1);
+  const hoPage = Math.max(1, parseInt(typeof params.hoPage === "string" ? params.hoPage : "1", 10) || 1);
+  const HO_PAGE_SIZE = 10;
 
   // ── KPI queries (parallel) ──
   const [
@@ -105,6 +107,7 @@ export default async function TodayPage({
     [{ total }],
     openTasks,
     handedOverItems,
+    [{ total: hoTotal }],
   ] = await Promise.all([
     db.select({ total: sql<number>`count(*)::int` }).from(task)
       .innerJoin(company, eq(task.companyCode, company.companyCode)).where(tabCondition),
@@ -118,6 +121,11 @@ export default async function TodayPage({
       companyCode: requirement.companyCode, companyName: company.companyName,
       roleName: requirement.roleName, classification: requirement.classification,
     }).from(requirement).innerJoin(company, eq(requirement.companyCode, company.companyCode))
+      .where(and(sql`${requirement.status} like 'handed_over_%'`, sql`${requirement.handedOverAt} >= ${monday}`))
+      .orderBy(sql`${requirement.handedOverAt} DESC`)
+      .limit(HO_PAGE_SIZE)
+      .offset((hoPage - 1) * HO_PAGE_SIZE),
+    db.select({ total: sql<number>`count(*)::int` }).from(requirement)
       .where(and(sql`${requirement.status} like 'handed_over_%'`, sql`${requirement.handedOverAt} >= ${monday}`)),
   ]);
 
@@ -165,7 +173,7 @@ export default async function TodayPage({
           />
         </div>
         <div className="flex-1">
-          <HandedOverPanel items={handedOverData} />
+          <HandedOverPanel items={handedOverData} total={hoTotal} page={hoPage} pageSize={HO_PAGE_SIZE} />
         </div>
       </div>
     </div>
