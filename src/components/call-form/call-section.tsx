@@ -14,6 +14,7 @@ type Contact = {
   name: string | null;
   designation: string | null;
   mobile: string | null;
+  valid: boolean;
 };
 
 type Props = {
@@ -23,8 +24,6 @@ type Props = {
   disposition: string;
   reasonCode: string;
   comment: string;
-  timing: string;
-  timingDate: string;
   onChange: (field: string, value: string) => void;
   errors?: Record<string, string>;
 };
@@ -36,8 +35,6 @@ export function CallSection({
   disposition,
   reasonCode,
   comment,
-  timing,
-  timingDate,
   onChange,
   errors,
 }: Props) {
@@ -78,7 +75,7 @@ export function CallSection({
             value={channel}
             onChange={(e) => onChange("channel", e.target.value)}
           >
-            {channels.map((ch) => (
+            {channels.map((ch: string) => (
               <option key={ch} value={ch}>
                 {ch.charAt(0).toUpperCase() + ch.slice(1)}
               </option>
@@ -117,12 +114,11 @@ export function CallSection({
             onChange={(e) => onChange("reasonCode", e.target.value)}
           >
             <option value="">Select reason…</option>
-            {noRequirementReasons.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
+            {noRequirementReasons.map((r: string) => (
+              <option key={r} value={r}>{r}</option>
             ))}
           </select>
+          {errs.reasonCode && <p className="text-sm text-destructive mt-1">{errs.reasonCode}</p>}
         </div>
       )}
 
@@ -134,48 +130,10 @@ export function CallSection({
           <input
             type="date"
             className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={timingDate}
-            onChange={(e) => onChange("timingDate", e.target.value)}
+            value={reasonCode}
+            onChange={(e) => onChange("reasonCode", e.target.value)}
           />
-        </div>
-      )}
-
-      <div className="space-y-1.5">
-        <Label className="text-xs">
-          Do they require now?
-        </Label>
-        <div className="flex gap-4">
-          {(["now", "later", "not_hiring"] as const).map((opt) => (
-            <label key={opt} className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="timing"
-                value={opt}
-                checked={timing === opt}
-                onChange={(e) => onChange("timing", e.target.value)}
-              />
-              {opt === "now"
-                ? "Yes, now"
-                : opt === "later"
-                  ? "Later — date"
-                  : "Not hiring"}
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {(timing === "later" || timing === "not_hiring") && (
-        <div className="space-y-1.5 max-w-xs">
-          <Label className="text-xs">
-            {timing === "later" ? "Expected date" : "Next call date"}{" "}
-            <span className="text-destructive">*</span>
-          </Label>
-          <input
-            type="date"
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={timingDate}
-            onChange={(e) => onChange("timingDate", e.target.value)}
-          />
+          {errs.timingDate && <p className="text-sm text-destructive mt-1">{errs.timingDate}</p>}
         </div>
       )}
 
@@ -193,9 +151,6 @@ export function CallSection({
         {errs.comment && <p className="text-sm text-destructive mt-1">{errs.comment}</p>}
         <p className="text-xs text-muted-foreground mt-0.5">{comment.length}/5000</p>
       </div>
-
-      {errs.reasonCode && showReason && <p className="text-sm text-destructive">{errs.reasonCode}</p>}
-      {errs.timingDate && showDate && <p className="text-sm text-destructive">{errs.timingDate}</p>}
     </div>
   );
 }

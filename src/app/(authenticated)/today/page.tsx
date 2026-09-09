@@ -48,16 +48,22 @@ export default async function TodayPage({
     [overdueResult],
     [validatedResult],
     handedOverRows,
+    [pendingValidationResult],
   ] = await Promise.all([
     db.select({ count: sql<number>`count(*)::int` }).from(task)
       .where(and(eq(task.status, "open"), lte(task.dueDate, today), or(eq(task.userId, userId), isNull(task.userId)))),
     db.select({ count: sql<number>`count(*)::int`, oldestDate: sql<string>`min(${task.dueDate})` }).from(task)
       .where(and(eq(task.status, "open"), lt(task.dueDate, today), or(eq(task.userId, userId), isNull(task.userId)))),
     db.select({ count: sql<number>`count(*)::int` }).from(requirement)
-      .where(and(sql`${requirement.requiredCountValidated} is not null`, sql`${requirement.updatedAt} >= ${monday}`)),
+      .where(and(sql`${requirement.requiredCountValidated} > 0`, sql`${requirement.updatedAt} >= ${monday}`)),
     db.select({ status: requirement.status, count: sql<number>`count(*)::int` }).from(requirement)
       .where(and(sql`${requirement.status} like 'handed_over_%'`, sql`${requirement.handedOverAt} >= ${monday}`))
       .groupBy(requirement.status),
+    db.select({ count: sql<number>`count(*)::int` }).from(requirement)
+      .where(and(
+        eq(requirement.status, "captured"),
+        sql`(${requirement.requiredCountValidated} IS NULL OR ${requirement.requiredCountValidated} = 0)`
+      )),
   ]);
 
   const handedOverByRoute = { scheduling: 0, collector: 0, apssdc: 0 };
@@ -75,6 +81,7 @@ export default async function TodayPage({
     handedOverScheduling: handedOverByRoute.scheduling,
     handedOverCollector: handedOverByRoute.collector,
     handedOverApssdc: handedOverByRoute.apssdc,
+    rolesPendingValidation: pendingValidationResult.count,
   };
 
   // ── Build tab-specific WHERE ──

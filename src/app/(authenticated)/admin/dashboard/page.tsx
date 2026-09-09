@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { company, interaction, requirement, task, user } from "@/lib/db/schema";
-import { eq, and, gte, like, isNotNull, sql, count, sum, lt, desc } from "drizzle-orm";
+import { eq, and, gte, gt, like, isNotNull, sql, count, sum, lt, desc } from "drizzle-orm";
 import { requireAdmin, todayDate } from "@/lib/auth-utils";
 import { KpiCards } from "@/components/admin/kpi-cards";
 import { CallerTable, type CallerRow } from "@/components/admin/caller-table";
@@ -108,9 +108,9 @@ export default async function AdminDashboardPage({
         timeFilter
       )),
     db.select({ value: count() }).from(requirement)
-      .where(and(isNotNull(requirement.requiredCountValidated), reqTimeFilter)),
+      .where(and(gt(requirement.requiredCountValidated, 0), reqTimeFilter)),
     db.select({ value: sum(requirement.requiredCountValidated) }).from(requirement)
-      .where(and(isNotNull(requirement.requiredCountValidated), reqTimeFilter)),
+      .where(and(gt(requirement.requiredCountValidated, 0), reqTimeFilter)),
     db.select({ value: count() }).from(requirement)
       .where(and(like(requirement.status, "handed_over_%"), startDate ? (endDate ? and(gte(requirement.handedOverAt, startDate), lt(requirement.handedOverAt, endDate)) : gte(requirement.handedOverAt, startDate)) : undefined)),
     db.select({ value: count() }).from(requirement)
@@ -134,11 +134,11 @@ export default async function AdminDashboardPage({
 
     // Openings validated
     db.select({ value: sql<number>`COALESCE(SUM(${requirement.requiredCountValidated}), 0)` })
-      .from(requirement).where(isNotNull(requirement.requiredCountValidated)),
+      .from(requirement).where(gt(requirement.requiredCountValidated, 0)),
 
     // Avg openings per requirement
     db.select({ value: sql<number>`COALESCE(AVG(${requirement.requiredCountValidated}), 0)` })
-      .from(requirement).where(isNotNull(requirement.requiredCountValidated)),
+      .from(requirement).where(gt(requirement.requiredCountValidated, 0)),
 
     // Funnel - attempted (all time)
     db.select({ value: sql<number>`COUNT(DISTINCT ${interaction.companyCode})` }).from(interaction),
@@ -147,7 +147,7 @@ export default async function AdminDashboardPage({
       .where(sql`${interaction.disposition} IN (${sql.join(CONNECTED_DISPOSITIONS.map((d) => sql`${d}`), sql`, `)})`),
     // Funnel - validated (all time)
     db.select({ value: sql<number>`COUNT(DISTINCT ${requirement.companyCode})` }).from(requirement)
-      .where(isNotNull(requirement.requiredCountValidated)),
+      .where(gt(requirement.requiredCountValidated, 0)),
     // Funnel - handed over (all time)
     db.select({ value: sql<number>`COUNT(DISTINCT ${requirement.companyCode})` }).from(requirement)
       .where(like(requirement.status, "handed_over_%")),

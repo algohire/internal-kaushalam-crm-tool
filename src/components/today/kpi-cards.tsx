@@ -37,6 +37,7 @@ export type KpiData = {
   handedOverScheduling: number;
   handedOverCollector: number;
   handedOverApssdc: number;
+  rolesPendingValidation: number;
 };
 
 export function KpiCards({ data }: { data: KpiData }) {
@@ -56,7 +57,7 @@ export function KpiCards({ data }: { data: KpiData }) {
     .join(" · ");
 
   return (
-    <div className="grid grid-cols-4 gap-3">
+    <div className="grid grid-cols-5 gap-3">
       <KpiCard value={data.dueToday} label="Due today" />
       <KpiCard
         value={data.overdue}
@@ -73,6 +74,11 @@ export function KpiCards({ data }: { data: KpiData }) {
         value={totalHandedOver}
         label="Handed over this week"
         detail={handedOverDetail || undefined}
+      />
+      <KpiCard
+        value={data.rolesPendingValidation}
+        label="Roles pending validation"
+        variant={data.rolesPendingValidation > 0 ? "warn" : "default"}
       />
     </div>
   );

@@ -83,6 +83,7 @@ export const callSchema = z.object({
   nextStep: z.string().min(1, "Next step required").max(500, "Next step too long"),
   nextActionDate: futureDateMax12m,
   requirements: z.array(requirementUpdateSchema),
+  callOnly: z.boolean().optional().default(false),
 });
 
 export function flattenZodErrors(error: z.ZodError): Record<string, string> {

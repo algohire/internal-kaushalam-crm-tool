@@ -47,11 +47,12 @@ export type CallInput = {
   disposition: string;
   reasonCode?: string;
   comment: string;
-  timing: string;
+  timing?: string;
   timingDate?: string;
   nextStep: string;
   nextActionDate: string;
   requirements: RequirementUpdate[];
+  callOnly?: boolean;
 };
 
 const TRACKED_FIELDS = [
@@ -156,7 +157,8 @@ export async function logCall(input: CallInput) {
       createdAt: now,
     });
 
-    // 2. Process each requirement
+    // 2. Process each requirement (skip for call-only mode)
+    if (!input.callOnly)
     for (const reqUpdate of input.requirements) {
       const isNew = !reqUpdate.id;
       const reqId = isNew ? crypto.randomUUID() : reqUpdate.id;
