@@ -162,6 +162,7 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
 
   // Counts
   const activeRoles = reqUpdates.filter((r) => r.status !== "no_requirement");
+  const closedRoles = reqUpdates.filter((r) => r.status === "no_requirement");
   const validatedRoles = activeRoles.filter(isRoleValidated);
   const pendingRoles = activeRoles.length - validatedRoles.length;
   const isConnected = isConnectedDisposition(disposition);
@@ -187,8 +188,10 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
     if (isPending) return;
     const errs = validateCallFields();
 
-    // Enforce (A): if connected disposition, at least one role must be validated
-    if (isConnected && !hasAnyValidated) {
+    // Enforce (A): if connected disposition AND there are active roles,
+    // at least one must be validated. Skipped when every role is marked
+    // "not required any more" — there is nothing left to validate.
+    if (isConnected && activeRoles.length > 0 && !hasAnyValidated) {
       errs.roles = "You selected a connected disposition — validate at least one role (count > 0, qualification, experience).";
     }
 
@@ -319,7 +322,16 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
             </div>
           )}
 
-          {isConnected && !hasAnyValidated && (
+          {activeRoles.length === 0 && reqUpdates.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-blue-800">
+                All {reqUpdates.length} roles marked &quot;not required any more&quot;. Saving will close these roles — no validation needed.
+              </p>
+            </div>
+          )}
+
+          {isConnected && activeRoles.length > 0 && !hasAnyValidated && (
             <div className="bg-red-50 border border-red-200 rounded-md p-3 flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
               <p className="text-xs text-red-800">
@@ -420,10 +432,13 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
             {saveMode === "validate" && (
               <>
                 <Separator />
-                <div className="flex gap-4 text-xs">
+                <div className="flex gap-4 text-xs flex-wrap">
                   <span className="text-green-700 font-medium">{validatedRoles.length} roles validated</span>
                   {pendingRoles > 0 && (
                     <span className="text-amber-600 font-medium">{pendingRoles} roles still pending</span>
+                  )}
+                  {closedRoles.length > 0 && (
+                    <span className="text-muted-foreground font-medium">{closedRoles.length} roles closed (not required)</span>
                   )}
                 </div>
 
