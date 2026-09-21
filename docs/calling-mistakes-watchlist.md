@@ -215,6 +215,16 @@ These comments just repeat the outcome. "Not required" as the reason for *No req
 
 The full list of all 778 companies, with each caller's comment and the reason it should have had, is in `data/no-requirement-other-reasons-2026-09-19.csv`.
 
+**Update, 21 September.** The back-catalogue has been corrected where the comment made the reason clear: **218 calls were re-tagged** from *Other* to the right reason or outcome, and **five new reasons were added to the dropdown**:
+
+- Not submitted by employer / wrongly entered on EDB
+- Self-employed / family-run — no staff
+- May need later — no date given
+- No need now — will contact if required
+- Not a hiring business / roles don't match
+
+*Other* on No requirement calls has dropped from **75% to 56%**. The remaining **601** could not be corrected because the comment gives no reason at all. Those stay as *Other* until somebody asks the employer why, so please ask on the next call.
+
 ---
 
 ## Quick checklist before you press Save
