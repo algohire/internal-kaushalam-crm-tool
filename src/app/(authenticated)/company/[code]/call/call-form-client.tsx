@@ -17,7 +17,12 @@ import { Classification } from "@/components/call-form/classification";
 import { HandoffGate } from "@/components/call-form/handoff-gate";
 import { NextStep } from "@/components/call-form/next-step";
 import { logCall, type RequirementUpdate } from "@/lib/actions/call";
-import { dispositionRequiresReason, dispositionRequiresDate, getDisposition, isConnectedDisposition } from "@/lib/config/dropdowns";
+import { dispositionRequiresReason, getDisposition } from "@/lib/config/dropdowns";
+import {
+  checkRequirementRules,
+  checkFollowUpDate,
+  isValidMobileContact,
+} from "@/lib/rules/requirement-rules";
 import { toast } from "sonner";
 import { AlertTriangle, Phone, ClipboardCheck } from "lucide-react";
 
@@ -104,6 +109,16 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
     setReqUpdates((prev) => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
+      // Closing a role wipes what only makes sense on an open one (rule R2).
+      if (field === "status" && value === "no_requirement") {
+        updated[index] = {
+          ...updated[index],
+          requiredCountValidated: 0,
+          classification: undefined,
+          collectorDistrict: undefined,
+          handoff: false,
+        };
+      }
       return updated;
     });
   }
@@ -157,6 +172,9 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
     if (dispositionRequiresReason(disposition) && !reasonCode) {
       errs.reasonCode = "Reason required for this disposition";
     }
+    // Hiring later keeps its follow-up date in reasonCode (the date picker).
+    const dateIssue = checkFollowUpDate(disposition, reasonCode);
+    if (dateIssue) errs.timingDate = dateIssue.message;
     return errs;
   }
 
@@ -165,7 +183,7 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
   const closedRoles = reqUpdates.filter((r) => r.status === "no_requirement");
   const validatedRoles = activeRoles.filter(isRoleValidated);
   const pendingRoles = activeRoles.length - validatedRoles.length;
-  const isConnected = isConnectedDisposition(disposition);
+  const isHiringNow = disposition === "hiring_now";
   const hasAnyValidated = validatedRoles.length > 0;
 
   const callFieldsMissing = !contactId || !disposition || !comment.trim() || !nextStep.trim() || !nextActionDate;
@@ -188,11 +206,18 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
     if (isPending) return;
     const errs = validateCallFields();
 
-    // Enforce (A): if connected disposition AND there are active roles,
-    // at least one must be validated. Skipped when every role is marked
-    // "not required any more" — there is nothing left to validate.
-    if (isConnected && activeRoles.length > 0 && !hasAnyValidated) {
-      errs.roles = "You selected a connected disposition — validate at least one role (count > 0, qualification, experience).";
+    // Save-time role rules R1–R6 — the server runs the same function.
+    const violations = checkRequirementRules({
+      disposition,
+      followUpDate: reasonCode,
+      roles: reqUpdates,
+      originalCounts: Object.fromEntries(requirements.map((r) => [r.id, r.requiredCountValidated])),
+      hasValidMobile: contacts.some(isValidMobileContact),
+    });
+    for (const v of violations) {
+      if (v.rule === "DATE") continue; // already reported by validateCallFields
+      const key = v.roleIndex < 0 ? `call_${v.rule}` : `req_${v.roleIndex}_${v.rule}`;
+      errs[key] = v.message;
     }
 
     // Per-role validations
@@ -331,11 +356,20 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
             </div>
           )}
 
-          {isConnected && activeRoles.length > 0 && !hasAnyValidated && (
+          {isHiringNow && activeRoles.length > 0 && !hasAnyValidated && (
             <div className="bg-red-50 border border-red-200 rounded-md p-3 flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
               <p className="text-xs text-red-800">
-                Connected disposition selected but no roles validated. Use &quot;Save &amp; Validate Roles&quot; to validate at least one role, or &quot;Save Call Only&quot; if you don&apos;t have role details yet.
+                &quot;Hiring now&quot; selected but no roles validated. Enter the count, qualification, experience, route and handoff comment, or use &quot;Save Call Only&quot; if you don&apos;t have role details yet.
+              </p>
+            </div>
+          )}
+
+          {disposition && !isHiringNow && (
+            <div className="bg-muted/60 border rounded-md p-3 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                Counts can only be entered on a &quot;Connected — hiring now&quot; call. Use &quot;Save Call Only&quot;, or &quot;Save &amp; Validate Roles&quot; to close roles that are not required any more.
               </p>
             </div>
           )}

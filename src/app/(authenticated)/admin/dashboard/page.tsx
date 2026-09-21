@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { db } from "@/lib/db";
 import { company, interaction, requirement, task, user, qualificationMaster } from "@/lib/db/schema";
 import { eq, and, gte, gt, like, isNotNull, sql, count, sum, lt, desc } from "drizzle-orm";
@@ -5,6 +6,7 @@ import { requireAdmin, todayDate } from "@/lib/auth-utils";
 import { KpiCards } from "@/components/admin/kpi-cards";
 import { CallerTable, type CallerRow } from "@/components/admin/caller-table";
 import { PeriodSelector } from "@/components/admin/period-selector";
+import { ReportDownload } from "@/components/admin/report-download";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -43,11 +45,14 @@ function periodRange(period: string): { start: string | null; end: string | null
 export default async function AdminDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; qualPage?: string; funnelView?: string }>;
 }) {
   await requireAdmin();
   const params = await searchParams;
   const period = params.period || "today";
+  const qualPage = Math.max(1, parseInt(params.qualPage ?? "1", 10) || 1);
+  const funnelView = params.funnelView === "tier" ? "tier" : "overall";
+  const QUAL_PAGE_SIZE = 10;
   const { start: startDate, end: endDate } = periodRange(period);
   const today = todayDate();
 
@@ -60,6 +65,11 @@ export default async function AdminDashboardPage({
     ? endDate
       ? and(gte(requirement.updatedAt, startDate), lt(requirement.updatedAt, endDate))
       : gte(requirement.updatedAt, startDate)
+    : undefined;
+  const handoverTimeFilter = startDate
+    ? endDate
+      ? and(gte(requirement.handedOverAt, startDate), lt(requirement.handedOverAt, endDate))
+      : gte(requirement.handedOverAt, startDate)
     : undefined;
 
   const [
@@ -83,7 +93,9 @@ export default async function AdminDashboardPage({
     funnelAttempted,
     funnelConnected,
     funnelValidated,
+    funnelClassified,
     funnelHandedOver,
+    funnelByTier,
     // Tasks
     overdueTasksResult,
     tasksDueTodayResult,
@@ -107,6 +119,12 @@ export default async function AdminDashboardPage({
     noAnswerCountResult,
     avgCallsToConnectResult,
     reattemptedResult,
+    // Outreach & conversion (company-level counts)
+    validatedCompaniesResult,
+    qualGroupCountResult,
+    schedulingCompaniesResult,
+    collectorCompaniesResult,
+    apssdcCompaniesResult,
   ] = await Promise.all([
     db.select({ value: count() }).from(company),
     db.select({ value: sql<number>`COUNT(DISTINCT ${interaction.companyCode})` })
@@ -158,9 +176,56 @@ export default async function AdminDashboardPage({
     // Funnel - validated (all time)
     db.select({ value: sql<number>`COUNT(DISTINCT ${requirement.companyCode})` }).from(requirement)
       .where(gt(requirement.requiredCountValidated, 0)),
+    // Funnel - classified (all time): every validated role has a route decided
+    db.select({ value: sql<number>`COUNT(*)` })
+      .from(sql`(
+        SELECT company_code FROM requirement
+        WHERE required_count_validated > 0
+        GROUP BY company_code
+        HAVING COUNT(*) FILTER (WHERE classification IS NULL OR classification = '') = 0
+      ) classified`),
     // Funnel - handed over (all time)
     db.select({ value: sql<number>`COUNT(DISTINCT ${requirement.companyCode})` }).from(requirement)
       .where(like(requirement.status, "handed_over_%")),
+
+    // Funnel split by tier (all time) — every stage, one row per tier
+    db.select({
+      tier: sql<number>`t.tier`,
+      universe: sql<number>`t.universe`,
+      attempted: sql<number>`t.attempted`,
+      connected: sql<number>`t.connected`,
+      validated: sql<number>`t.validated`,
+      classified: sql<number>`t.classified`,
+      handedOver: sql<number>`t.handed_over`,
+    }).from(sql`(
+      SELECT
+        c.tier,
+        COUNT(DISTINCT c.company_code)::int  AS universe,
+        COUNT(DISTINCT i.company_code)::int  AS attempted,
+        COUNT(DISTINCT ic.company_code)::int AS connected,
+        COUNT(DISTINCT rv.company_code)::int AS validated,
+        COUNT(DISTINCT rc.company_code)::int AS classified,
+        COUNT(DISTINCT rh.company_code)::int AS handed_over
+      FROM company c
+      LEFT JOIN (SELECT DISTINCT company_code FROM interaction) i
+        ON i.company_code = c.company_code
+      LEFT JOIN (SELECT DISTINCT company_code FROM interaction
+                 WHERE disposition IN ('hiring_now','hiring_later','no_requirement',
+                                       'not_operational','do_not_call')) ic
+        ON ic.company_code = c.company_code
+      LEFT JOIN (SELECT DISTINCT company_code FROM requirement
+                 WHERE required_count_validated > 0) rv
+        ON rv.company_code = c.company_code
+      LEFT JOIN (SELECT DISTINCT company_code FROM requirement
+                 WHERE classification IS NOT NULL AND classification <> '') rc
+        ON rc.company_code = c.company_code
+      LEFT JOIN (SELECT DISTINCT company_code FROM requirement
+                 WHERE status LIKE 'handed_over_%') rh
+        ON rh.company_code = c.company_code
+      WHERE c.tier IS NOT NULL
+      GROUP BY c.tier
+      ORDER BY c.tier
+    ) t`),
 
     // Overdue tasks
     db.select({ value: count() }).from(task)
@@ -220,9 +285,11 @@ export default async function AdminDashboardPage({
       roles: count(),
       openings: sql<number>`COALESCE(SUM(${requirement.requiredCountValidated}), 0)`,
     }).from(requirement)
-      .where(isNotNull(requirement.qualification))
+      .where(and(isNotNull(requirement.qualification), gt(requirement.requiredCountValidated, 0)))
       .groupBy(requirement.qualification)
-      .orderBy(desc(sql`COALESCE(SUM(${requirement.requiredCountValidated}), 0)`)),
+      .orderBy(desc(sql`COALESCE(SUM(${requirement.requiredCountValidated}), 0)`))
+      .limit(QUAL_PAGE_SIZE)
+      .offset((qualPage - 1) * QUAL_PAGE_SIZE),
 
     // Qualification master for name resolution
     db.select({ id: qualificationMaster.id, name: qualificationMaster.name })
@@ -256,6 +323,22 @@ export default async function AdminDashboardPage({
     // Companies reattempted (>1 call)
     db.select({ value: sql<number>`COUNT(*)` })
       .from(sql`(SELECT company_code FROM interaction GROUP BY company_code HAVING COUNT(*) > 1) sub`),
+
+    // Validated — distinct companies with at least one role count > 0
+    db.select({ value: sql<number>`COUNT(DISTINCT ${requirement.companyCode})` }).from(requirement)
+      .where(and(gt(requirement.requiredCountValidated, 0), reqTimeFilter)),
+
+    // Qualification group count (for pagination)
+    db.select({ value: sql<number>`COUNT(DISTINCT ${requirement.qualification})` }).from(requirement)
+      .where(and(isNotNull(requirement.qualification), gt(requirement.requiredCountValidated, 0))),
+
+    // Handover — distinct companies per route
+    db.select({ value: sql<number>`COUNT(DISTINCT ${requirement.companyCode})` }).from(requirement)
+      .where(and(eq(requirement.status, "handed_over_scheduling"), handoverTimeFilter)),
+    db.select({ value: sql<number>`COUNT(DISTINCT ${requirement.companyCode})` }).from(requirement)
+      .where(and(eq(requirement.status, "handed_over_collector"), handoverTimeFilter)),
+    db.select({ value: sql<number>`COUNT(DISTINCT ${requirement.companyCode})` }).from(requirement)
+      .where(and(eq(requirement.status, "handed_over_apssdc"), handoverTimeFilter)),
   ]);
 
   // Per-caller enrichment
@@ -308,6 +391,44 @@ export default async function AdminDashboardPage({
     qualificationLabel: resolveQualNames(q.qualification),
   }));
 
+  const qualTotalGroups = Number(qualGroupCountResult[0]?.value) || 0;
+  const qualTotalPages = Math.ceil(qualTotalGroups / QUAL_PAGE_SIZE);
+  const qualStart = qualTotalGroups > 0 ? (qualPage - 1) * QUAL_PAGE_SIZE + 1 : 0;
+  const qualEnd = Math.min(qualPage * QUAL_PAGE_SIZE, qualTotalGroups);
+
+  // Preserve the active period when paging the qualification table
+  function qualPageHref(p: number) {
+    const sp = new URLSearchParams();
+    if (params.period) sp.set("period", params.period);
+    if (params.funnelView) sp.set("funnelView", params.funnelView);
+    sp.set("qualPage", String(p));
+    return `/admin/dashboard?${sp.toString()}`;
+  }
+
+  // Preserve period and pagination when switching the funnel view
+  function funnelViewHref(view: "overall" | "tier") {
+    const sp = new URLSearchParams();
+    if (params.period) sp.set("period", params.period);
+    if (params.qualPage) sp.set("qualPage", params.qualPage);
+    if (view === "tier") sp.set("funnelView", "tier");
+    const qs = sp.toString();
+    return qs ? `/admin/dashboard?${qs}` : "/admin/dashboard";
+  }
+
+  const FUNNEL_STAGES = [
+    { label: "Universe (companies)", value: totalCompanies, color: "bg-gray-100" },
+    { label: "Attempted (companies)", value: Number(funnelAttempted[0]?.value || 0), color: "bg-blue-50" },
+    { label: "Connected (companies)", value: Number(funnelConnected[0]?.value || 0), color: "bg-blue-100" },
+    { label: "Validated (companies)", value: Number(funnelValidated[0]?.value || 0), color: "bg-green-50" },
+    { label: "Handed Over (companies)", value: Number(funnelClassified[0]?.value || 0), color: "bg-green-200" },
+  ];
+
+  // Handover is counted at the point the route is decided. The status flip that
+  // pushes it onto the receiving team's queue is a separate dispatch step.
+  const dispatchedCompanies = Number(funnelHandedOver[0]?.value || 0);
+  const handedOverCompanies = Number(funnelClassified[0]?.value || 0);
+  const awaitingDispatch = Math.max(handedOverCompanies - dispatchedCompanies, 0);
+
   const pendingValidation = pendingValidationResult[0]?.value ?? 0;
   const neverContacted = neverContactedResult[0]?.value ?? 0;
   const validatedNotHanded = validatedNotHandedResult[0]?.value ?? 0;
@@ -316,6 +437,55 @@ export default async function AdminDashboardPage({
   const noAnswerRate = totalCalls > 0 ? Math.round((Number(noAnswerCount) / totalCalls) * 100) : 0;
   const avgCallsToConnect = Math.round(Number(avgCallsToConnectResult[0]?.value) * 10) / 10;
   const reattempted = Number(reattemptedResult[0]?.value) || 0;
+
+  // ── Outreach & Conversion (the team-facing metric set) ──
+  // Contacted = companies with >=1 interaction. Reached = companies with >=1
+  // connected disposition. The two below partition Contacted exactly.
+  const companiesContacted = attempted;
+  const companiesReached = connected;
+  const companiesCouldNotReach = Math.max(companiesContacted - companiesReached, 0);
+
+  const validatedCompanies = Number(validatedCompaniesResult[0]?.value) || 0;
+  const validatedRoles = Number(reqsValidatedResult[0]?.value) || 0;
+
+  const schedulingCompanies = Number(schedulingCompaniesResult[0]?.value) || 0;
+  const collectorCompanies = Number(collectorCompaniesResult[0]?.value) || 0;
+  const apssdcCompanies = Number(apssdcCompaniesResult[0]?.value) || 0;
+  const schedulingRoles = Number(handedOverSResult[0]?.value) || 0;
+  const collectorRoles = Number(handedOverCResult[0]?.value) || 0;
+  const apssdcRoles = Number(handedOverAResult[0]?.value) || 0;
+
+  const periodLabel: Record<string, string> = {
+    today: "Today", yesterday: "Yesterday", week: "This week",
+    month: "This month", all: "All time",
+  };
+
+  type OutreachRow = {
+    label: string;
+    companies: number;
+    roles: number | null;
+    hint: string;
+    indent: boolean;
+    divider: boolean;
+    tone: "default" | "good" | "muted";
+  };
+
+  const outreachRows: OutreachRow[] = [
+    { label: "Companies Contacted", companies: companiesContacted, roles: null,
+      hint: "at least one call logged", indent: false, divider: false, tone: "default" },
+    { label: "Could not Reach", companies: companiesCouldNotReach, roles: null,
+      hint: "contacted, never got through", indent: true, divider: false, tone: "muted" },
+    { label: "Reached", companies: companiesReached, roles: null,
+      hint: "spoke to someone", indent: true, divider: false, tone: "good" },
+    { label: "Validated", companies: validatedCompanies, roles: validatedRoles,
+      hint: "at least one role with a confirmed count", indent: false, divider: true, tone: "default" },
+    { label: "Handover — Scheduling", companies: schedulingCompanies, roles: schedulingRoles,
+      hint: "Kaushalam direct hiring", indent: false, divider: true, tone: "good" },
+    { label: "Handover — Collector", companies: collectorCompanies, roles: collectorRoles,
+      hint: "district local mobilisation", indent: false, divider: false, tone: "good" },
+    { label: "Handover — APSSDC", companies: apssdcCompanies, roles: apssdcRoles,
+      hint: "needs training first", indent: false, divider: false, tone: "muted" },
+  ];
 
   const kpis = [
     { label: "Total Companies", value: totalCompanies, sub: "companies in EDB" },
@@ -355,8 +525,77 @@ export default async function AdminDashboardPage({
           <h1 className="text-xl font-semibold">Dashboard</h1>
           <p className="text-sm text-muted-foreground">Team performance overview</p>
         </div>
-        <PeriodSelector />
+        <div className="flex items-center gap-3">
+          <ReportDownload />
+          <PeriodSelector />
+        </div>
       </div>
+
+      {/* Outreach & Conversion — primary team metrics */}
+      <Card className="mb-6">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-sm">Outreach &amp; Conversion</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Companies and roles at each stage
+              </p>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              {periodLabel[period] ?? "This week"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-xs text-muted-foreground">
+                <th className="text-left px-4 py-2 font-medium">Stage</th>
+                <th className="text-right px-4 py-2 font-medium w-32">Companies</th>
+                <th className="text-right px-4 py-2 font-medium w-32">Roles</th>
+              </tr>
+            </thead>
+            <tbody>
+              {outreachRows.map((r) => (
+                <tr
+                  key={r.label}
+                  className={`border-b last:border-0 ${r.divider ? "border-t-2 border-t-muted" : ""}`}
+                >
+                  <td className={`px-4 py-2 ${r.indent ? "pl-9" : ""}`}>
+                    <div className="flex items-center gap-1.5">
+                      {r.indent && (
+                        <span className="text-muted-foreground text-xs">└</span>
+                      )}
+                      <span className={r.indent ? "" : "font-medium"}>{r.label}</span>
+                    </div>
+                    <div className={`text-xs text-muted-foreground ${r.indent ? "ml-4" : ""}`}>
+                      {r.hint}
+                    </div>
+                  </td>
+                  <td
+                    className={`text-right px-4 py-2 tabular-nums font-semibold ${
+                      r.tone === "good"
+                        ? "text-green-700"
+                        : r.tone === "muted"
+                          ? "text-muted-foreground"
+                          : ""
+                    }`}
+                  >
+                    {r.companies.toLocaleString()}
+                  </td>
+                  <td className="text-right px-4 py-2 tabular-nums font-semibold">
+                    {r.roles === null ? (
+                      <span className="text-muted-foreground font-normal">—</span>
+                    ) : (
+                      r.roles.toLocaleString()
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
 
       <KpiCards items={kpis} />
 
@@ -440,29 +679,125 @@ export default async function AdminDashboardPage({
       {/* Funnel */}
       <Card className="mt-6">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Funnel (cumulative, all time)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-0 text-center text-xs">
-            {[
-              { label: "Universe (companies)", value: totalCompanies, color: "bg-gray-100" },
-              { label: "Attempted (companies)", value: Number(funnelAttempted[0]?.value || 0), color: "bg-blue-50" },
-              { label: "Connected (companies)", value: Number(funnelConnected[0]?.value || 0), color: "bg-blue-100" },
-              { label: "Validated (companies)", value: Number(funnelValidated[0]?.value || 0), color: "bg-green-50" },
-              { label: "Handed Over (companies)", value: Number(funnelHandedOver[0]?.value || 0), color: "bg-green-100" },
-            ].map((step, i, arr) => {
-              const prev = i > 0 ? arr[i - 1].value : 0;
-              const convPct = prev > 0 ? Math.round((step.value / prev) * 100) : 0;
-              return (
-                <div key={step.label} className={`flex-1 py-3 px-2 ${step.color} ${i === 0 ? "rounded-l-md" : ""} ${i === arr.length - 1 ? "rounded-r-md" : ""} border-r border-white`}>
-                  <div className="font-semibold text-base tabular-nums">{step.value.toLocaleString()}</div>
-                  <div className="text-muted-foreground mt-0.5">{step.label}</div>
-                  {i > 0 && <div className="text-[10px] text-muted-foreground mt-0.5">{convPct}%</div>}
-                </div>
-              );
-            })}
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle className="text-sm">Funnel (cumulative, all time)</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Handed over = a fulfilment route has been decided on the requirement.
+                {awaitingDispatch > 0 && (
+                  <> Of these, {dispatchedCompanies.toLocaleString()} have been pushed to the
+                  receiving team&apos;s queue; {awaitingDispatch.toLocaleString()} are decided
+                  but not yet dispatched.</>
+                )}
+              </p>
+            </div>
+            <div className="flex gap-0.5 bg-muted rounded-lg p-1 shrink-0">
+              {([
+                { key: "overall", label: "Overall" },
+                { key: "tier", label: "By tier" },
+              ] as const).map((v) => (
+                <Link
+                  key={v.key}
+                  href={funnelViewHref(v.key)}
+                  prefetch={false}
+                  className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                    funnelView === v.key
+                      ? "bg-card text-foreground font-medium shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {v.label}
+                </Link>
+              ))}
+            </div>
           </div>
-        </CardContent>
+        </CardHeader>
+
+        {funnelView === "overall" ? (
+          <CardContent>
+            <div className="flex gap-0 text-center text-xs">
+              {FUNNEL_STAGES.map((step, i, arr) => {
+                const prev = i > 0 ? arr[i - 1].value : 0;
+                const convPct = prev > 0 ? Math.round((step.value / prev) * 100) : 0;
+                return (
+                  <div key={step.label} className={`flex-1 py-3 px-2 ${step.color} ${i === 0 ? "rounded-l-md" : ""} ${i === arr.length - 1 ? "rounded-r-md" : ""} border-r border-white`}>
+                    <div className="font-semibold text-base tabular-nums">{step.value.toLocaleString()}</div>
+                    <div className="text-muted-foreground mt-0.5">{step.label}</div>
+                    {i > 0 && <div className="text-[10px] text-muted-foreground mt-0.5">{convPct}%</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        ) : (
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-xs text-muted-foreground">
+                  <th className="text-left px-4 py-2 font-medium">Tier</th>
+                  <th className="text-right px-3 py-2 font-medium">Universe</th>
+                  <th className="text-right px-3 py-2 font-medium">Attempted</th>
+                  <th className="text-right px-3 py-2 font-medium">Connected</th>
+                  <th className="text-right px-3 py-2 font-medium">Validated</th>
+                  <th className="text-right px-3 py-2 font-medium">Handed Over</th>
+                </tr>
+              </thead>
+              <tbody>
+                {funnelByTier.map((t) => {
+                  const universe = Number(t.universe) || 0;
+                  const cell = (v: unknown) => {
+                    const val = Number(v) || 0;
+                    const share = universe > 0 ? Math.round((val / universe) * 100) : 0;
+                    return (
+                      <td className="text-right px-3 py-2 tabular-nums">
+                        <div className="font-medium">{val.toLocaleString()}</div>
+                        <div className="text-[10px] text-muted-foreground">{share}%</div>
+                      </td>
+                    );
+                  };
+                  return (
+                    <tr key={String(t.tier)} className="border-b last:border-0">
+                      <td className="px-4 py-2">
+                        <Badge variant="outline" className="text-xs">Tier {String(t.tier)}</Badge>
+                      </td>
+                      <td className="text-right px-3 py-2 tabular-nums font-medium">
+                        {universe.toLocaleString()}
+                      </td>
+                      {cell(t.attempted)}
+                      {cell(t.connected)}
+                      {cell(t.validated)}
+                      {cell(t.classified)}
+                    </tr>
+                  );
+                })}
+                {funnelByTier.length > 0 && (
+                  <tr className="bg-muted/40 font-medium">
+                    <td className="px-4 py-2">All tiers</td>
+                    {(["universe", "attempted", "connected", "validated", "classified"] as const).map((k) => {
+                      const total = funnelByTier.reduce(
+                        (s, r) => s + (Number(r[k]) || 0), 0);
+                      const uni = funnelByTier.reduce(
+                        (s, r) => s + (Number(r.universe) || 0), 0);
+                      const share = uni > 0 ? Math.round((total / uni) * 100) : 0;
+                      return (
+                        <td key={k} className="text-right px-3 py-2 tabular-nums">
+                          <div>{total.toLocaleString()}</div>
+                          {k !== "universe" && (
+                            <div className="text-[10px] text-muted-foreground">{share}%</div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            <p className="text-xs text-muted-foreground px-4 py-2.5 border-t">
+              Percentages are each stage as a share of that tier&apos;s own universe,
+              not of the stage before it.
+            </p>
+          </CardContent>
+        )}
       </Card>
 
       {/* Qualification Breakdown + Handover Breakdown */}
@@ -494,6 +829,33 @@ export default async function AdminDashboardPage({
                 )}
               </tbody>
             </table>
+            {qualTotalGroups > QUAL_PAGE_SIZE && (
+              <div className="flex items-center justify-between px-4 py-2.5 border-t text-xs text-muted-foreground">
+                <span>
+                  {qualStart}–{qualEnd} of {qualTotalGroups} qualification groups
+                </span>
+                <div className="flex gap-1.5">
+                  {qualPage > 1 && (
+                    <Link
+                      href={qualPageHref(qualPage - 1)}
+                      prefetch={false}
+                      className="px-2 py-0.5 border rounded hover:bg-muted"
+                    >
+                      ←
+                    </Link>
+                  )}
+                  {qualPage < qualTotalPages && (
+                    <Link
+                      href={qualPageHref(qualPage + 1)}
+                      prefetch={false}
+                      className="px-2 py-0.5 border rounded hover:bg-muted"
+                    >
+                      →
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

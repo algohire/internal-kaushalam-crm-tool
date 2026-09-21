@@ -29,6 +29,12 @@ export const noRequirementReasons = [
   "Seasonal — not this season",
   "Unit not yet commissioned",
   "Requirement already filled",
+  // Added Sep 2026 after reading the 819 calls that fell back to "Other".
+  "Not submitted by employer / wrongly entered on EDB",
+  "Self-employed / family-run — no staff",
+  "May need later — no date given",
+  "No need now — will contact if required",
+  "Not a hiring business / roles don't match",
   "Other (comment)",
 ];
 

@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Check, X } from "lucide-react";
 import type { RequirementUpdate } from "@/lib/actions/call";
+import { isValidMobileContact } from "@/lib/rules/requirement-rules";
 
 type Contact = {
   id: string;
@@ -80,9 +81,7 @@ type Props = {
 };
 
 export function HandoffGate({ requirements, contacts, onHandoff }: Props) {
-  const hasValidMobile = contacts.some(
-    (c) => c.valid && c.mobile && c.mobile.replace(/\D/g, "").length >= 10
-  );
+  const hasValidMobile = contacts.some(isValidMobileContact);
 
   return (
     <div className="space-y-3">

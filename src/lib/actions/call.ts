@@ -12,10 +12,16 @@ import {
   edbOutbox,
   auditLog,
 } from "@/lib/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { callSchema } from "@/lib/validations";
 import { ZodError } from "zod";
+import {
+  checkRequirementRules,
+  checkFollowUpDate,
+  deriveTiming,
+  isValidMobileContact,
+} from "@/lib/rules/requirement-rules";
 
 export type RequirementUpdate = {
   id: string;
@@ -134,6 +140,50 @@ export async function logCall(input: CallInput) {
   const now = utcNow();
   const today = todayDate();
 
+  // Hiring later carries its follow-up date in reasonCode (the form's date
+  // picker); an explicit timingDate wins when a client sends one.
+  const followUpDate = input.timingDate || (input.disposition === "hiring_later" ? input.reasonCode : "") || null;
+
+  const dateIssue = checkFollowUpDate(input.disposition, followUpDate);
+  if (dateIssue) return { error: `Validation failed: ${dateIssue.message}` };
+
+  // Save-time role rules — same function the form runs (src/lib/rules).
+  if (!input.callOnly && input.requirements.length > 0) {
+    const existingIds = input.requirements.map((r) => r.id).filter(Boolean);
+    const [stored, contacts] = await Promise.all([
+      existingIds.length > 0
+        ? db
+            .select({ id: requirement.id, count: requirement.requiredCountValidated })
+            .from(requirement)
+            .where(and(
+              eq(requirement.companyCode, input.companyCode),
+              inArray(requirement.id, existingIds),
+            ))
+        : Promise.resolve([] as { id: string; count: number | null }[]),
+      db
+        .select({ valid: contact.valid, mobile: contact.mobile })
+        .from(contact)
+        .where(eq(contact.companyCode, input.companyCode)),
+    ]);
+
+    const violations = checkRequirementRules({
+      disposition: input.disposition,
+      followUpDate,
+      roles: input.requirements,
+      originalCounts: Object.fromEntries(stored.map((r) => [r.id, r.count])),
+      hasValidMobile: contacts.some(isValidMobileContact),
+    });
+    if (violations.length > 0) {
+      return { error: `Validation failed: ${violations.map((v) => v.message).join("; ")}` };
+    }
+  }
+
+  // Timing implied by this call. Outcomes that say nothing about hiring
+  // (no answer, wrong contact, duplicate) leave each role's timing as it was.
+  const callTiming = input.timing
+    ? { timing: input.timing, timingDate: input.timingDate || null }
+    : deriveTiming(input.disposition, followUpDate);
+
   const interactionId = crypto.randomUUID();
   const touchedReqIds: string[] = [];
   const allFieldChanges: Record<string, unknown>[] = [];
@@ -194,8 +244,8 @@ export async function logCall(input: CallInput) {
           handedOverAt: reqUpdate.handoff ? now : null,
           handedOverBy: reqUpdate.handoff ? username : null,
           comment: reqUpdate.handoffComment || null,
-          timing: input.timing || null,
-          timingDate: input.timingDate || null,
+          timing: callTiming?.timing ?? null,
+          timingDate: callTiming?.timingDate ?? null,
           flags: "added_by_caller",
           version: 1,
           createdAt: now,
@@ -254,8 +304,8 @@ export async function logCall(input: CallInput) {
           handoffComment: reqUpdate.handoffComment || null,
           comment: reqUpdate.handoffComment || null,
           status: reqStatus,
-          timing: input.timing || null,
-          timingDate: input.timingDate || null,
+          timing: callTiming ? callTiming.timing : existingReq.timing,
+          timingDate: callTiming ? callTiming.timingDate : existingReq.timingDate,
         };
 
         const diff = buildDiff(existingReq as Record<string, unknown>, updatedFields);
