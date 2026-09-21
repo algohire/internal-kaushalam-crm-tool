@@ -34,7 +34,10 @@ async function main() {
     (SELECT COUNT(DISTINCT company_code) FROM requirement WHERE required_count_validated > 0)::int AS validated,
     (SELECT COUNT(DISTINCT company_code) FROM requirement WHERE classification <> '')::int AS handed_over,
     (SELECT COUNT(*) FROM task WHERE status = 'open'
-       AND title LIKE 'Follow up — employer said%')::int AS follow_up_tasks,
+       AND title LIKE 'Follow up — employer said%')::int AS hiring_later_tasks,
+    (SELECT COUNT(*) FROM task WHERE status = 'open'
+       AND title LIKE 'Ask why%')::int AS ask_why_tasks,
+    (SELECT COUNT(*) FROM company c WHERE c.last_disposition = 'do_not_call')::int AS blocked_companies,
     (SELECT COUNT(*) FROM audit_log WHERE action = 'reason_remap')::int AS audit_rows,
     (SELECT COUNT(*) FROM interaction WHERE reason_code = 'Other (comment)')::int AS other_calls_left`)) as Record<string, unknown>[];
   console.log("\nFunnel and checks:", f);

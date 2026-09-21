@@ -94,13 +94,15 @@ async function main() {
       statements.push(sql`UPDATE company SET last_disposition = ${newDisp}, updated_at = ${now}
                             WHERE company_code = ${cur.company_code}`);
     }
-    // A remapped "hiring later" is only useful if somebody is asked to call back.
-    if (isLater) {
+    // A remap is only useful if somebody is asked to call back: "hiring later"
+    // gets the date the employer gave, other rows use the task columns.
+    const taskTitle = isLater ? "Follow up — employer said they would hire later" : (r.task_title ?? "");
+    const taskDue = isLater ? r.proposed_followup_date : (r.task_due_date ?? "");
+    if (taskTitle && taskDue) {
       statements.push(sql`INSERT INTO task (id, company_code, user_id, title, due_date, source, status,
                             created_by_interaction, created_at)
                           VALUES (${crypto.randomUUID()}, ${cur.company_code}, ${cur.user_id},
-                            'Follow up — employer said they would hire later',
-                            ${r.proposed_followup_date}, 'next_step', 'open', ${cur.id}, ${now})`);
+                            ${taskTitle}, ${taskDue}, 'next_step', 'open', ${cur.id}, ${now})`);
       tasks++;
     }
     statements.push(sql`INSERT INTO audit_log (id, user_id, username, action, object_type, object_id,
@@ -116,7 +118,10 @@ async function main() {
     summary.set(k, (summary.get(k) ?? 0) + 1);
   }
 
-  const file = `data/reason-remap-backup-${today}.json`;
+  // Named after the source proposal so two remaps on one day cannot overwrite
+  // each other's backup.
+  const stem = CSV.split("/").pop()!.replace(/\.csv$/, "");
+  const file = `data/backup-${stem}.json`;
   writeFileSync(file, JSON.stringify(backup, null, 1));
   console.log(`\nbackup written: ${file} (${backup.length} calls)`);
   if (skipped > 0) console.log(`skipped ${skipped} rows changed since the proposal was built`);
