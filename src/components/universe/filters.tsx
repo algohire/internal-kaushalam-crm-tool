@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "./searchable-select";
+import { MultiSelect, type MultiSelectOption } from "./multi-select";
 import { X, Search, Bookmark } from "lucide-react";
 
 export interface FilterOptions {
@@ -17,6 +18,7 @@ export interface FilterOptions {
   statuses: string[];
   classifications: string[];
   tiers: number[];
+  dispositions: MultiSelectOption[];
 }
 
 interface FiltersProps {
@@ -56,6 +58,9 @@ export function UniverseFilters({ options }: FiltersProps) {
     };
   }, [searchValue, searchParams, updateParam]);
 
+  const selectedDispositions =
+    searchParams.get("disposition")?.split(",").filter(Boolean) ?? [];
+
   const clearFilters = useCallback(() => {
     setSearchValue("");
     router.push("/universe");
@@ -65,7 +70,7 @@ export function UniverseFilters({ options }: FiltersProps) {
 
   const activeCount = [
     "q", "district", "sector", "subsector", "mandal", "stage",
-    "tier", "classification", "status", "tags", "worked",
+    "tier", "classification", "status", "tags", "worked", "disposition",
   ].filter((k) => searchParams.get(k)).length;
 
   return (
@@ -145,6 +150,14 @@ export function UniverseFilters({ options }: FiltersProps) {
           options={options.tags}
           value={searchParams.get("tags") ?? ""}
           onChange={(v) => updateParam("tags", v)}
+        />
+
+        <MultiSelect
+          label="Last call"
+          options={options.dispositions}
+          selected={selectedDispositions}
+          onChange={(v) => updateParam("disposition", v.join(","))}
+          placeholder="Search disposition..."
         />
 
         <select

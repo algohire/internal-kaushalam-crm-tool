@@ -195,8 +195,11 @@ export async function generateStatusReport() {
   p(`| Role | A distinct job position recorded against a company. |`);
   p(`| Opening | A vacancy count recorded against a role. |`);
   p();
-  p(`Handover is counted at the point the route is decided. Dispatch to the receiving`);
-  p(`team's queue is reported separately in section 7.`);
+  p(`| Dispatched | Role visible in the receiving team's queue. Saving a route now dispatches`);
+  p(`in the same step, so the two match for all work done from 30 September 2026. |`);
+  p();
+  p(`Handover is counted at the point the route is decided. Dispatch is reported`);
+  p(`separately in sections 7 and 11.`);
   p();
 
   p(`## 2. Employer Database — Current Position`);
@@ -448,7 +451,7 @@ export async function generateStatusReport() {
 
   p(`## 11. Position by Tier`);
   p();
-  p(`| Tier | Universe | Attempted | Connected | Validated | Classified | Handed over |`);
+  p(`| Tier | Universe | Attempted | Connected | Validated | Handed over | Dispatched |`);
   p(`|---|---:|---:|---:|---:|---:|---:|`);
   for (const t of tierRows) {
     p(`| Tier ${t.tier} | ${fmt(t.universe)} | ${fmt(t.attempted)} | ${fmt(t.connected)} | ${fmt(t.validated)} | ${fmt(t.classified)} | ${fmt(t.handed_over)} |`);
@@ -460,7 +463,7 @@ export async function generateStatusReport() {
   p(`|---|---:|---:|---:|---:|---:|`);
   for (const t of tierRows) {
     const u = n(t.universe);
-    p(`| Tier ${t.tier} | ${fmt(u)} | ${pct(n(t.attempted), u, 0)} | ${pct(n(t.connected), u, 0)} | ${pct(n(t.validated), u, 0)} | ${pct(n(t.handed_over), u, 0)} |`);
+    p(`| Tier ${t.tier} | ${fmt(u)} | ${pct(n(t.attempted), u, 0)} | ${pct(n(t.connected), u, 0)} | ${pct(n(t.validated), u, 0)} | ${pct(n(t.classified), u, 0)} |`);
   }
   p();
 

@@ -137,14 +137,6 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
     setReqUpdates((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function handleHandoff(index: number) {
-    setReqUpdates((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], handoff: true };
-      return updated;
-    });
-  }
-
   function handleNextStepChange(field: string, value: string) {
     clearError(field);
     if (field === "nextStep") setNextStep(value);
@@ -273,7 +265,8 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
   // Summary data
   const selectedContact = contacts.find((c) => c.id === contactId);
   const dispLabel = getDisposition(disposition)?.label || disposition;
-  const handoffReqs = reqUpdates.filter((r) => r.handoff);
+  // Deciding the route is the handover — no separate button to press.
+  const handoffReqs = reqUpdates.filter((r) => r.classification && r.status !== "no_requirement");
 
   return (
     <div className="space-y-6">
@@ -330,11 +323,7 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
           </div>
 
           <div className="bg-card border rounded-lg p-5">
-            <HandoffGate
-              requirements={reqUpdates}
-              contacts={contacts}
-              onHandoff={handleHandoff}
-            />
+            <HandoffGate requirements={reqUpdates} contacts={contacts} />
           </div>
 
           {/* (C) Warning: pending roles */}
@@ -488,7 +477,7 @@ export function CallFormClient({ company, contacts, requirements, qualificationO
                 {handoffReqs.length > 0 && (
                   <div className="bg-green-50 border border-green-200 rounded-md p-2.5">
                     <span className="text-green-800 font-medium text-xs">
-                      Handing off {handoffReqs.length} role{handoffReqs.length > 1 ? "s" : ""}:
+                      Sending {handoffReqs.length} role{handoffReqs.length > 1 ? "s" : ""} to the receiving team:
                     </span>
                     <ul className="mt-1 space-y-0.5">
                       {handoffReqs.map((r, i) => (

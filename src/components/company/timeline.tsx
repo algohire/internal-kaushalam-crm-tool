@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { dispositionShortLabel, dispositionColor } from "@/lib/config/dropdowns";
 
 type Interaction = {
   id: string;
@@ -15,27 +16,6 @@ type Interaction = {
   source: string;
   createdAt: string;
 };
-
-function dispositionLabel(code: string): string {
-  const map: Record<string, string> = {
-    no_answer: "No answer",
-    wrong_contact: "Wrong contact",
-    hiring_now: "Hiring now",
-    hiring_later: "Hiring later",
-    no_requirement: "No requirement",
-    not_operational: "Not operational",
-    do_not_call: "Do not call",
-    duplicate: "Duplicate",
-  };
-  return map[code] || code;
-}
-
-function dispositionColor(code: string): string {
-  if (code === "hiring_now") return "bg-green-50 text-green-700 border-green-200";
-  if (code === "hiring_later") return "bg-amber-50 text-amber-700 border-amber-200";
-  if (code === "no_answer" || code === "wrong_contact") return "bg-red-50 text-red-700 border-red-200";
-  return "bg-gray-100 text-gray-600";
-}
 
 function DiffChip({ field, from, to }: { field: string; from: string; to: string }) {
   return (
@@ -118,7 +98,7 @@ export function Timeline({
                     })}
                   </span>
                   <Badge variant="outline" className={`${dispositionColor(entry.disposition)} text-xs`}>
-                    {dispositionLabel(entry.disposition)}
+                    {dispositionShortLabel(entry.disposition)}
                   </Badge>
                 </div>
 

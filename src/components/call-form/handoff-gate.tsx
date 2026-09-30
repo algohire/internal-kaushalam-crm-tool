@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { Check, X } from "lucide-react";
 import type { RequirementUpdate } from "@/lib/actions/call";
 import { isValidMobileContact } from "@/lib/rules/requirement-rules";
@@ -64,23 +63,22 @@ function getGateChecks(
 function routeLabel(classification: string | undefined): string {
   switch (classification) {
     case "kaushalam":
-      return "Hand off to Scheduling";
+      return "Scheduling";
     case "apssdc":
-      return "Hand off to APSSDC via EDB";
+      return "APSSDC via EDB";
     case "collector":
-      return "Hand off to Collector";
+      return "the District Collector";
     default:
-      return "Hand off";
+      return "the receiving team";
   }
 }
 
 type Props = {
   requirements: RequirementUpdate[];
   contacts: Contact[];
-  onHandoff: (index: number) => void;
 };
 
-export function HandoffGate({ requirements, contacts, onHandoff }: Props) {
+export function HandoffGate({ requirements, contacts }: Props) {
   const hasValidMobile = contacts.some(isValidMobileContact);
 
   return (
@@ -91,7 +89,6 @@ export function HandoffGate({ requirements, contacts, onHandoff }: Props) {
 
         const checks = getGateChecks(req, hasValidMobile);
         const allPassed = checks.every((c) => c.passed);
-        const missingCount = checks.filter((c) => !c.passed).length;
         const roleName = req.roleNameEdited || req.roleName;
 
         return (
@@ -124,19 +121,11 @@ export function HandoffGate({ requirements, contacts, onHandoff }: Props) {
                 </li>
               ))}
             </ul>
-            <Button
-              type="button"
-              size="sm"
-              className="bg-[#620124] hover:bg-[#7B1A36]"
-              disabled={!allPassed || req.handoff}
-              onClick={() => onHandoff(idx)}
-            >
-              {req.handoff
-                ? "Marked for handoff"
-                : allPassed
-                  ? routeLabel(req.classification)
-                  : `${routeLabel(req.classification)} — ${missingCount} field${missingCount > 1 ? "s" : ""} missing`}
-            </Button>
+            <p className={`text-xs ${allPassed ? "text-green-700" : "text-muted-foreground"}`}>
+              {allPassed
+                ? `Saving now sends this role to ${routeLabel(req.classification)}.`
+                : "Fill the fields above — saving will send this role to the receiving team."}
+            </p>
           </div>
         );
       })}

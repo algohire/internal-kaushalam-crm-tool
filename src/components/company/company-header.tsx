@@ -11,8 +11,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Phone, Plus, Tag } from "lucide-react";
-import { tags as fixedTags } from "@/lib/config/dropdowns";
 import { updateCompanyTags } from "@/lib/actions/company";
+import { tags as fixedTags, dispositionShortLabel, dispositionColor } from "@/lib/config/dropdowns";
 
 type Props = {
   companyCode: string;
@@ -26,29 +26,6 @@ type Props = {
   currentTags: string[];
   onAddContact: () => void;
 };
-
-function dispositionLabel(code: string): string {
-  const map: Record<string, string> = {
-    no_answer: "No answer",
-    wrong_contact: "Wrong contact",
-    hiring_now: "Hiring now",
-    hiring_later: "Hiring later",
-    no_requirement: "No requirement",
-    not_operational: "Not operational",
-    do_not_call: "Do not call",
-    duplicate: "Duplicate",
-  };
-  return map[code] || code;
-}
-
-function dispositionColor(code: string): string {
-  if (code === "hiring_now") return "bg-green-50 text-green-700 border-green-200";
-  if (code === "hiring_later") return "bg-amber-50 text-amber-700 border-amber-200";
-  if (code === "no_answer" || code === "wrong_contact") return "bg-red-50 text-red-700 border-red-200";
-  if (code === "no_requirement" || code === "not_operational" || code === "do_not_call")
-    return "bg-gray-100 text-gray-600";
-  return "bg-gray-100 text-gray-600";
-}
 
 export function CompanyHeader({
   companyCode,
@@ -99,7 +76,7 @@ export function CompanyHeader({
             )}
             {lastDisposition && (
               <Badge variant="outline" className={dispositionColor(lastDisposition)}>
-                {dispositionLabel(lastDisposition)}
+                {dispositionShortLabel(lastDisposition)}
               </Badge>
             )}
             {lastContactAt && (

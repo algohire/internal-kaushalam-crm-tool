@@ -99,6 +99,16 @@ function buildDiff(
   return diff;
 }
 
+/**
+ * Deciding the route IS the handover: the save-time rules already require the
+ * count, qualification, experience, handoff comment and a valid contact before
+ * a route can be chosen, so there is nothing left for a separate button to
+ * gate. A role with a route is dispatched in the same save.
+ */
+function isDispatched(reqUpdate: RequirementUpdate): boolean {
+  return !!reqUpdate.classification && reqUpdate.status !== "no_requirement";
+}
+
 function handoffStatus(classification: string | undefined): string {
   switch (classification) {
     case "kaushalam":
@@ -113,7 +123,7 @@ function handoffStatus(classification: string | undefined): string {
 }
 
 function outboxCategory(reqUpdate: RequirementUpdate): string {
-  if (reqUpdate.handoff) return "handed_over";
+  if (isDispatched(reqUpdate)) return "handed_over";
   if (reqUpdate.status === "no_requirement") return "closed";
   return "requirement_changed";
 }
@@ -214,7 +224,8 @@ export async function logCall(input: CallInput) {
       const reqId = isNew ? crypto.randomUUID() : reqUpdate.id;
       touchedReqIds.push(reqId);
 
-      const reqStatus = reqUpdate.handoff
+      const dispatched = isDispatched(reqUpdate);
+      const reqStatus = dispatched
         ? handoffStatus(reqUpdate.classification)
         : reqUpdate.status || "captured";
 
@@ -241,8 +252,8 @@ export async function logCall(input: CallInput) {
           collectorDistrict: reqUpdate.collectorDistrict || null,
           status: reqStatus,
           handoffComment: reqUpdate.handoffComment || null,
-          handedOverAt: reqUpdate.handoff ? now : null,
-          handedOverBy: reqUpdate.handoff ? username : null,
+          handedOverAt: dispatched ? now : null,
+          handedOverBy: dispatched ? username : null,
           comment: reqUpdate.handoffComment || null,
           timing: callTiming?.timing ?? null,
           timingDate: callTiming?.timingDate ?? null,
@@ -310,7 +321,7 @@ export async function logCall(input: CallInput) {
 
         const diff = buildDiff(existingReq as Record<string, unknown>, updatedFields);
         const hasChanges = Object.keys(diff).length > 0;
-        const isHandoff = reqUpdate.handoff && !existingReq.handedOverAt;
+        const isHandoff = dispatched && !existingReq.handedOverAt;
 
         if (hasChanges || isHandoff) {
           const newVersion = existingReq.version + 1;

@@ -125,3 +125,33 @@ export function dispositionRequiresReason(code: string): boolean {
 export function dispositionRequiresDate(code: string): boolean {
   return getDisposition(code)?.requires_date ?? false;
 }
+
+/**
+ * Short labels for badges and filter chips. The `label` on each Disposition is
+ * the long call-form wording ("Attempted — no answer"); these are the compact
+ * forms used wherever a disposition is shown as a badge.
+ */
+const dispositionShortLabels: Record<string, string> = {
+  no_answer: "No answer",
+  wrong_contact: "Wrong contact",
+  hiring_now: "Hiring now",
+  hiring_later: "Hiring later",
+  no_requirement: "No requirement",
+  not_operational: "Not operational",
+  do_not_call: "Do not call",
+  duplicate: "Duplicate",
+};
+
+export function dispositionShortLabel(code: string): string {
+  return dispositionShortLabels[code] || code;
+}
+
+export function dispositionColor(code: string): string {
+  if (code === "hiring_now") return "bg-green-50 text-green-700 border-green-200";
+  if (code === "hiring_later") return "bg-amber-50 text-amber-700 border-amber-200";
+  if (code === "no_answer" || code === "wrong_contact") return "bg-red-50 text-red-700 border-red-200";
+  return "bg-gray-100 text-gray-600";
+}
+
+/** Sentinel used in the `disposition` URL filter for "never called". */
+export const NEVER_CALLED = "none";

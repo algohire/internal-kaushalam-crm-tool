@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requirement, company, contact } from "@/lib/db/schema";
-import { eq, like, and, gte, lte, sql, count } from "drizzle-orm";
+import { eq, like, and, gte, lte, inArray, or, isNull, sql, count } from "drizzle-orm";
 import { requireAuth, formatDateIST } from "@/lib/auth-utils";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ExportButton } from "@/components/handed-over/export-button";
+import { DispositionFilter } from "@/components/handed-over/disposition-filter";
+import { dispositionShortLabel, dispositionColor, NEVER_CALLED } from "@/lib/config/dropdowns";
 import { Suspense } from "react";
 import {
   Table,
@@ -41,6 +43,9 @@ export default async function HandedOverPage({
   const route = typeof params.route === "string" ? params.route : "";
   const from = typeof params.from === "string" ? params.from : "";
   const to = typeof params.to === "string" ? params.to : "";
+  const dispositions = (typeof params.disposition === "string" ? params.disposition : "")
+    .split(",")
+    .filter(Boolean);
   const page = Math.max(1, parseInt(typeof params.page === "string" ? params.page : "1", 10) || 1);
 
   const conditions = [like(requirement.status, "handed_over_%")];
@@ -60,9 +65,19 @@ export default async function HandedOverPage({
     conditions.push(lte(requirement.handedOverAt, to + "T23:59:59Z"));
   }
 
+  // Latest call disposition on the company (denormalized by lib/actions/call.ts).
+  if (dispositions.length > 0) {
+    const codes = dispositions.filter((d) => d !== NEVER_CALLED);
+    const clauses = [];
+    if (codes.length > 0) clauses.push(inArray(company.lastDisposition, codes));
+    if (dispositions.includes(NEVER_CALLED)) clauses.push(isNull(company.lastDisposition));
+    const clause = clauses.length === 1 ? clauses[0] : or(...clauses);
+    if (clause) conditions.push(clause);
+  }
+
   const whereClause = and(...conditions);
 
-  const [[{ total }], rows] = await Promise.all([
+  const [[{ total }], rows, dispositionRows] = await Promise.all([
     db
       .select({ total: count() })
       .from(requirement)
@@ -84,6 +99,7 @@ export default async function HandedOverPage({
         handedOverBy: requirement.handedOverBy,
         handedOverAt: requirement.handedOverAt,
         status: requirement.status,
+        lastDisposition: company.lastDisposition,
         contactName: contact.name,
         contactMobile: contact.mobile,
       })
@@ -100,7 +116,22 @@ export default async function HandedOverPage({
       .orderBy(sql`${requirement.handedOverAt} DESC NULLS LAST`)
       .limit(PAGE_SIZE)
       .offset((page - 1) * PAGE_SIZE),
+    // Counts over all handed-over rows, not narrowed by the other filters.
+    db
+      .select({ v: company.lastDisposition, n: count() })
+      .from(requirement)
+      .innerJoin(company, eq(requirement.companyCode, company.companyCode))
+      .where(like(requirement.status, "handed_over_%"))
+      .groupBy(company.lastDisposition),
   ]);
+
+  const dispositionOptions = dispositionRows
+    .map((r) => ({
+      value: r.v ?? NEVER_CALLED,
+      label: r.v ? dispositionShortLabel(r.v) : "Never called",
+      count: r.n,
+    }))
+    .sort((a, b) => b.count - a.count);
 
   const start = total > 0 ? (page - 1) * PAGE_SIZE + 1 : 0;
   const end = Math.min(page * PAGE_SIZE, total);
@@ -111,6 +142,7 @@ export default async function HandedOverPage({
     if (route) sp.set("route", route);
     if (from) sp.set("from", from);
     if (to) sp.set("to", to);
+    if (dispositions.length) sp.set("disposition", dispositions.join(","));
     sp.set("page", String(p));
     return `/handed-over?${sp.toString()}`;
   }
@@ -151,6 +183,9 @@ export default async function HandedOverPage({
           <label className="text-xs text-muted-foreground block mb-1">To</label>
           <Input type="date" name="to" defaultValue={to} className="w-40 h-9" />
         </div>
+        <Suspense fallback={null}>
+          <DispositionFilter options={dispositionOptions} defaultValue={dispositions} />
+        </Suspense>
         <button
           type="submit"
           className="h-9 px-4 rounded-md bg-[#620124] text-white text-sm font-medium hover:bg-[#7B1A36]"
@@ -173,13 +208,14 @@ export default async function HandedOverPage({
               <TableHead>Handoff Comment</TableHead>
               <TableHead>By</TableHead>
               <TableHead>Date</TableHead>
+              <TableHead>Last call</TableHead>
               <TableHead>Contact</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                   No handed-over requirements found.
                 </TableCell>
               </TableRow>
@@ -206,6 +242,15 @@ export default async function HandedOverPage({
                 <TableCell className="text-sm">{r.handedOverBy || "—"}</TableCell>
                 <TableCell className="text-sm whitespace-nowrap">
                   {r.handedOverAt ? formatDateIST(r.handedOverAt) : "—"}
+                </TableCell>
+                <TableCell>
+                  {r.lastDisposition ? (
+                    <Badge variant="outline" className={dispositionColor(r.lastDisposition)}>
+                      {dispositionShortLabel(r.lastDisposition)}
+                    </Badge>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   {r.contactName ? (

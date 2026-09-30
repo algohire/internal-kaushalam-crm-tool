@@ -9,12 +9,14 @@ import {
   eq,
   gt,
   ilike,
+  inArray,
   isNull,
   like,
   lt,
   or,
   sql,
 } from "drizzle-orm";
+import { dispositionShortLabel, NEVER_CALLED } from "@/lib/config/dropdowns";
 import { UniverseFilters, type FilterOptions } from "@/components/universe/filters";
 import { CompanyTable, type CompanyRow } from "@/components/universe/company-table";
 
@@ -45,6 +47,7 @@ export default async function UniversePage({
   const tags = param(params, "tags");
   const worked = param(params, "worked");
   const bookmarked = param(params, "bookmarked");
+  const dispositions = param(params, "disposition").split(",").filter(Boolean);
   const page = Math.max(1, parseInt(param(params, "page") || "1", 10) || 1);
 
   // Build WHERE conditions
@@ -95,6 +98,19 @@ export default async function UniversePage({
     conditions.push(gt(company.lastContactAt, firstOfMonth));
   }
 
+  // Latest call disposition. company.lastDisposition is written in the same
+  // transaction as the interaction (see lib/actions/call.ts), so it is the
+  // latest call's disposition — no need to reach into `interaction` here.
+  if (dispositions.length > 0) {
+    const codes = dispositions.filter((d) => d !== NEVER_CALLED);
+    const wantsNeverCalled = dispositions.includes(NEVER_CALLED);
+    const clauses = [];
+    if (codes.length > 0) clauses.push(inArray(company.lastDisposition, codes));
+    if (wantsNeverCalled) clauses.push(isNull(company.lastDisposition));
+    const clause = clauses.length === 1 ? clauses[0] : or(...clauses);
+    if (clause) conditions.push(clause);
+  }
+
   // Bookmark filter
   if (bookmarked === "1") {
     conditions.push(like(company.bookmarkedBy, `%${session.user.id}%`));
@@ -133,6 +149,7 @@ export default async function UniversePage({
     tierRows,
     statusRows,
     classificationRows,
+    dispositionRows,
   ] = await Promise.all([
     db.select({ total: count() }).from(company).where(whereClause),
     db
@@ -151,6 +168,12 @@ export default async function UniversePage({
     db.selectDistinct({ v: company.tier }).from(company).where(sql`${company.tier} IS NOT NULL`).orderBy(asc(company.tier)),
     db.selectDistinct({ v: requirement.status }).from(requirement).where(sql`${requirement.status} IS NOT NULL`).orderBy(asc(requirement.status)),
     db.selectDistinct({ v: requirement.classification }).from(requirement).where(sql`${requirement.classification} IS NOT NULL`).orderBy(asc(requirement.classification)),
+    // Counts are across the whole universe, not narrowed by the other active
+    // filters — same as every other dropdown's options on this page.
+    db
+      .select({ v: company.lastDisposition, n: count() })
+      .from(company)
+      .groupBy(company.lastDisposition),
   ]);
 
   // Explode `;`-separated subsectors and tags into unique values
@@ -205,6 +228,13 @@ export default async function UniversePage({
     tiers: tierRows.map((r) => r.v).filter((v): v is number => v !== null),
     statuses: statusRows.map((r) => r.v).filter(Boolean) as string[],
     classifications: classificationRows.map((r) => r.v).filter(Boolean) as string[],
+    dispositions: dispositionRows
+      .map((r) => ({
+        value: r.v ?? NEVER_CALLED,
+        label: r.v ? dispositionShortLabel(r.v) : "Never called",
+        count: r.n,
+      }))
+      .sort((a, b) => b.count - a.count),
   };
 
   return (
