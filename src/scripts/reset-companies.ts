@@ -4,7 +4,9 @@
  * Dry run unless --apply is passed; a backup of everything removed is written
  * either way.
  *
- *   npx tsx src/scripts/reset-companies.ts [--apply]
+ *   npx tsx src/scripts/reset-companies.ts --select validated-no-route [--apply]
+ *   npx tsx src/scripts/reset-companies.ts --codes EDB-AAA-111,EDB-BBB-222 [--apply]
+ *   npx tsx src/scripts/reset-companies.ts [--apply]      # the 21 Sep list below
  *
  * Per company it removes the calls, role version history, call-created tasks
  * and unsent EDB outbox rows, deletes roles the callers added, and clears every
@@ -18,13 +20,18 @@ import { neon } from "@neondatabase/serverless";
 import { writeFileSync } from "fs";
 
 const sql = neon(process.env.DATABASE_URL!);
-const APPLY = process.argv.includes("--apply");
+const argv = process.argv.slice(2);
+const APPLY = argv.includes("--apply");
+const arg = (name: string) => {
+  const i = argv.indexOf(name);
+  return i >= 0 ? argv[i + 1] : undefined;
+};
 const now = new Date().toISOString();
 const today = now.split("T")[0];
 
 /** Approved 21 Sep 2026: counts that contradict the call, or were entered
  *  from information the caller's own note says was never collected. */
-const TARGETS: { code: string; why: string }[] = [
+const SEPT21: { code: string; why: string }[] = [
   // Record contradicts itself
   { code: "EDB-352-7611", why: "Do not call + role closed, yet count 10" },
   { code: "EDB-WI4-KLXB", why: "Count 100 with role closed and timing not hiring" },
@@ -50,6 +57,30 @@ const TARGETS: { code: string; why: string }[] = [
   { code: "EDB-5UQ-WJOD", why: "Count saved on a No answer call" },
 ];
 
+/** Companies holding a vacancy count with no route decided. Predate the save-time
+ *  rules, which now make that state impossible to create. */
+async function validatedNoRoute(): Promise<{ code: string; why: string }[]> {
+  const rows = (await sql.query(`
+    SELECT c.company_code FROM company c
+    WHERE EXISTS (SELECT 1 FROM requirement r WHERE r.company_code = c.company_code
+                    AND r.required_count_validated > 0)
+      AND NOT EXISTS (SELECT 1 FROM requirement r WHERE r.company_code = c.company_code
+                        AND r.classification IS NOT NULL AND r.classification <> '')
+    ORDER BY c.company_rank`)) as Record<string, unknown>[];
+  return rows.map((r) => ({ code: r.company_code as string, why: "Validated with no route decided" }));
+}
+
+async function resolveTargets(): Promise<{ code: string; why: string }[]> {
+  const codes = arg("--codes");
+  if (codes) {
+    return codes.split(",").map((c) => ({ code: c.trim(), why: "Named on the command line" }))
+      .filter((t) => t.code);
+  }
+  if (arg("--select") === "validated-no-route") return validatedNoRoute();
+  if (arg("--select")) throw new Error(`Unknown --select value: ${arg("--select")}`);
+  return SEPT21;
+}
+
 /** Every caller-entered column on a requirement, back to its ingested state. */
 const CLEAR_ROLE = `
   role_name_edited = NULL, standard_role = NULL, required_count_validated = NULL,
@@ -63,8 +94,13 @@ const CLEAR_ROLE = `
 const n = (v: unknown) => Number(v) || 0;
 
 async function main() {
-  const codes = TARGETS.map((t) => t.code);
-  const why = new Map(TARGETS.map((t) => [t.code, t.why]));
+  const targets = await resolveTargets();
+  if (targets.length === 0) {
+    console.log("Nothing matches — no companies to reset.");
+    return;
+  }
+  const codes = targets.map((t) => t.code);
+  const why = new Map(targets.map((t) => [t.code, t.why]));
 
   const state = (await sql.query(`
     SELECT c.company_code, c.company_name, c.tier, c.company_rank,
@@ -91,8 +127,8 @@ async function main() {
     FROM company c WHERE c.company_code = ANY($1)
     ORDER BY c.tier, c.company_rank`, [codes])) as Record<string, unknown>[];
 
-  if (state.length !== TARGETS.length) {
-    throw new Error(`Expected ${TARGETS.length} companies, found ${state.length}`);
+  if (state.length !== targets.length) {
+    throw new Error(`Expected ${targets.length} companies, found ${state.length}`);
   }
   const sent = state.filter((s) => n(s.outbox_sent) > 0);
   if (sent.length > 0) {
@@ -135,7 +171,8 @@ async function main() {
     tasks: await sql.query(`SELECT * FROM task WHERE company_code = ANY($1)`, [codes]),
     outbox: await sql.query(`SELECT * FROM edb_outbox WHERE company_code = ANY($1)`, [codes]),
   };
-  const file = `data/backup-company-reset-${today}.json`;
+  const label = arg("--select") ?? (arg("--codes") ? "named" : "sept21");
+  const file = `data/backup-company-reset-${label}-${today}.json`;
   writeFileSync(file, JSON.stringify(backup, null, 1));
   console.log(`\nbackup written: ${file}`);
 
