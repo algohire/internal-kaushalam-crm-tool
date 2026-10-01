@@ -31,6 +31,13 @@ const ROUTE_LABELS: Record<string, string> = {
   handed_over_apssdc: "APSSDC",
 };
 
+/** Falls back to the route itself where a role is decided but not yet dispatched. */
+const CLASSIFICATION_LABELS: Record<string, string> = {
+  kaushalam: "Scheduling",
+  collector: "Collector",
+  apssdc: "APSSDC",
+};
+
 async function main() {
   const { neon } = await import("@neondatabase/serverless");
   const sql = neon(process.env.DATABASE_URL!);
@@ -76,12 +83,23 @@ async function main() {
         r.role_name_edited, r.required_count_validated, r.qualification,
         r.experience_from, r.experience_to, r.gender_preference, r.age_limit,
         r.salary, r.pwd, r.need_training, r.qp_code,
+        r.timing, r.timing_date, r.comment AS role_comment,
         r.classification, r.collector_district, r.status,
         r.handoff_comment, r.handed_over_at, r.handed_over_by,
         r.flags AS role_flags, r.version, r.updated_at, r.updated_by,
         -- primary contact
         ct.name AS contact_name, ct.designation AS contact_designation,
-        ct.mobile AS contact_mobile, ct.email AS contact_email
+        ct.mobile AS contact_mobile, ct.email AS contact_email,
+        -- call history on the company
+        ic.calls, ic.connected_calls, ic.first_call_at,
+        lc.disposition AS last_call_disposition, lc.reason_code AS last_call_reason,
+        lc.comment AS last_call_comment, lc.username AS last_call_by,
+        lc.channel AS last_call_channel, lc.created_at AS last_call_at,
+        lc.next_step, lc.next_action_date,
+        cc.disposition AS last_connected_disposition, cc.reason_code AS last_connected_reason,
+        cc.comment AS last_connected_comment, cc.username AS last_connected_by,
+        cc.created_at AS last_connected_at,
+        tk.open_tasks, tk.next_task, tk.next_task_due
       FROM requirement r
       INNER JOIN company c ON c.company_code = r.company_code
       LEFT JOIN LATERAL (
@@ -91,6 +109,33 @@ async function main() {
         ORDER BY is_primary DESC, created_at ASC
         LIMIT 1
       ) ct ON true
+      -- most recent call on the company, whatever its outcome
+      LEFT JOIN LATERAL (
+        SELECT disposition, reason_code, comment, username, channel,
+               created_at, next_step, next_action_date
+        FROM interaction WHERE company_code = r.company_code
+        ORDER BY created_at DESC LIMIT 1
+      ) lc ON true
+      -- most recent call that actually reached someone
+      LEFT JOIN LATERAL (
+        SELECT disposition, reason_code, comment, username, created_at
+        FROM interaction WHERE company_code = r.company_code
+          AND disposition IN ('hiring_now','hiring_later','no_requirement',
+                              'not_operational','do_not_call')
+        ORDER BY created_at DESC LIMIT 1
+      ) cc ON true
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS calls,
+               COUNT(*) FILTER (WHERE disposition IN ('hiring_now','hiring_later',
+                 'no_requirement','not_operational','do_not_call'))::int AS connected_calls,
+               MIN(created_at) AS first_call_at
+        FROM interaction WHERE company_code = r.company_code
+      ) ic ON true
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS open_tasks, MIN(due_date) AS next_task_due,
+               (array_agg(title ORDER BY due_date))[1] AS next_task
+        FROM task WHERE company_code = r.company_code AND status = 'open'
+      ) tk ON true
       ${whereSql}
       ORDER BY c.tier NULLS LAST, c.company_rank, c.company_name, r.role_name
     `),
@@ -125,10 +170,18 @@ async function main() {
     "openings_validated", "is_validated",
     "qualification", "experience_from", "experience_to", "gender_preference",
     "age_limit", "salary", "pwd", "need_training", "qp_code",
-    "classification", "handover_route", "collector_district", "status",
+    "timing", "timing_date", "role_comment",
+    "classification", "route_label", "is_handed_over", "is_dispatched",
+    "collector_district", "status",
     "handoff_comment", "handed_over_at", "handed_over_by",
     "role_flags", "version", "updated_at", "updated_by",
     "contact_name", "contact_designation", "contact_mobile", "contact_email",
+    "calls", "connected_calls", "first_call_at",
+    "last_call_disposition", "last_call_reason", "last_call_comment", "last_call_by",
+    "last_call_channel", "last_call_at", "next_step", "next_action_date",
+    "last_connected_disposition", "last_connected_reason", "last_connected_comment",
+    "last_connected_by", "last_connected_at",
+    "open_tasks", "next_task", "next_task_due",
   ];
 
   const lines = [headers.join(",")];
@@ -153,12 +206,21 @@ async function main() {
         r.pwd ? "yes" : "no",
         r.need_training ? "yes" : "no",
         r.qp_code,
+        r.timing, r.timing_date, r.role_comment,
         r.classification,
-        ROUTE_LABELS[r.status as string] ?? "",
+        ROUTE_LABELS[r.status as string] ?? CLASSIFICATION_LABELS[r.classification as string] ?? "",
+        r.classification ? "yes" : "no",
+        String(r.status ?? "").startsWith("handed_over_") ? "yes" : "no",
         r.collector_district, r.status,
         r.handoff_comment, r.handed_over_at, r.handed_over_by,
         r.role_flags, r.version, r.updated_at, r.updated_by,
         r.contact_name, r.contact_designation, r.contact_mobile, r.contact_email,
+        r.calls, r.connected_calls, r.first_call_at,
+        r.last_call_disposition, r.last_call_reason, r.last_call_comment, r.last_call_by,
+        r.last_call_channel, r.last_call_at, r.next_step, r.next_action_date,
+        r.last_connected_disposition, r.last_connected_reason, r.last_connected_comment,
+        r.last_connected_by, r.last_connected_at,
+        r.open_tasks, r.next_task, r.next_task_due,
       ]
         .map(escapeCsv)
         .join(",")
